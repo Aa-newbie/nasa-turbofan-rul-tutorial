@@ -14,6 +14,7 @@ Dataset ต้นทาง: [NASA Turbofan Engine Degradation Simulation (Kaggle
 - [`rul_tutorial.py`](rul_tutorial.py) — สคริปต์บทเรียนแบบ step-by-step
   (ใช้ `# %%` แบ่ง cell รันทีละส่วนได้ใน VS Code + Python extension)
 - [`plots/`](plots/) — กราฟผลลัพธ์ตัวอย่างจากการรันสคริปต์
+- [`requirements.txt`](requirements.txt) — รายการไลบรารีพร้อมเวอร์ชันที่ตรึงไว้
 
 ## การติดตั้ง (สำหรับมือใหม่)
 
@@ -48,17 +49,40 @@ git clone https://github.com/Aa-newbie/nasa-turbofan-rul-tutorial.git
 cd nasa-turbofan-rul-tutorial
 ```
 
-### 3. ติดตั้งไลบรารีที่ต้องใช้
+### 3. สร้าง virtual environment แล้วติดตั้งไลบรารี
 
 เปิด terminal ในโฟลเดอร์ที่โหลดมา แล้วรัน:
 
+**Windows**
+
 ```bash
-pip install pandas numpy scikit-learn matplotlib seaborn
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 ```
+
+**macOS / Linux**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+`.venv` คือ *virtual environment* — โฟลเดอร์ที่เก็บไลบรารีของโปรเจกต์นี้แยกไว้
+ต่างหาก ไม่ปนกับ Python ตัวหลักของเครื่อง ข้อดีคือเวอร์ชันไลบรารีไม่ตีกับ
+โปรเจกต์อื่น และถ้าพังเมื่อไหร่ก็แค่ลบโฟลเดอร์ `.venv` ทิ้งแล้วสร้างใหม่
+
+เวอร์ชันของไลบรารีทั้งหมดถูกตรึงไว้ใน [`requirements.txt`](requirements.txt)
+แล้ว เพื่อให้รันซ้ำเมื่อไหร่ก็ได้ผลลัพธ์เหมือนเดิม
+
+> **ถ้าเครื่องมี MSYS2 / MinGW อยู่** — อย่าใช้ `python` ที่มาจาก `C:\msys64\...`
+> เพราะตัวนั้นไม่มี `pip` ติดมา และถูกล็อกให้ติดตั้งแพ็กเกจผ่าน `pacman`
+> เท่านั้น ให้ใช้ Python จาก python.org ตามข้อ 1
 
 ### 4. รันสคริปต์
 
-รันทั้งไฟล์:
+รันทั้งไฟล์ (ต้อง activate `.venv` ไว้ก่อน):
 
 ```bash
 python rul_tutorial.py
@@ -70,7 +94,12 @@ extension **2 ตัว** จากช่อง Extensions (`Ctrl+Shift+X`):
 - **"Jupyter"** (โดย Microsoft) — ตัวนี้จำเป็นด้วย ถ้าลงแค่ Python extension
   เฉยๆ จะไม่เห็นปุ่ม "Run Cell"
 
-ลงเสร็จแล้วปิด-เปิดไฟล์ `rul_tutorial.py` ใหม่ (หรือกด `Ctrl+Shift+P` พิมพ์
+จากนั้น **บอก VS Code ให้ใช้ `.venv`** โดยกด `Ctrl+Shift+P` พิมพ์
+"Python: Select Interpreter" แล้วเลือกตัวที่ขึ้นว่า `.venv` ขั้นตอนนี้ห้ามข้าม —
+ถ้า VS Code ไปหยิบ Python ตัวอื่นของเครื่องมาใช้ จะขึ้น error ว่า
+`requires the ipykernel package` ตอนกด Run Cell
+
+ปิด-เปิดไฟล์ `rul_tutorial.py` ใหม่ (หรือกด `Ctrl+Shift+P` พิมพ์
 "Reload Window") จะเห็นปุ่ม "Run Cell" ลอยอยู่เหนือแต่ละ block
 (คั่นด้วย `# %%`) กดไล่ทีละ block เพื่อดูผลลัพธ์และกราฟทีละขั้นตอน
 

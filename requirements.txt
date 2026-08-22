@@ -1,0 +1,10 @@
+# ไลบรารีที่บทเรียนนี้ใช้ (ตรึงเวอร์ชันไว้เพื่อให้รันซ้ำได้ผลเหมือนเดิม)
+# ติดตั้งด้วย: pip install -r requirements.txt
+
+pandas==3.0.5
+numpy==2.5.2
+scikit-learn==1.9.0
+matplotlib==3.11.1
+
+# จำเป็นสำหรับการรันทีละ cell (# %%) ใน VS Code
+ipykernel==7.3.0
