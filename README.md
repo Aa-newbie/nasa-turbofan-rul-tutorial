@@ -15,13 +15,48 @@ Dataset ต้นทาง: [NASA Turbofan Engine Degradation Simulation (Kaggle
   (ใช้ `# %%` แบ่ง cell รันทีละส่วนได้ใน VS Code + Python extension)
 - [`plots/`](plots/) — กราฟผลลัพธ์ตัวอย่างจากการรันสคริปต์
 
-## วิธีรัน
+## การติดตั้ง (สำหรับมือใหม่)
 
-ติดตั้งไลบรารีที่ต้องใช้:
+### 1. ติดตั้ง Python
+
+ถ้ายังไม่มี Python ในเครื่อง โหลดได้จาก [python.org/downloads](https://www.python.org/downloads/)
+**ตอนติดตั้งอย่าลืมติ๊ก "Add python.exe to PATH"** ไม่งั้นจะเรียกคำสั่ง `python` จาก
+terminal ไม่ได้ ตรวจสอบว่าติดตั้งสำเร็จด้วยคำสั่ง:
+
+```bash
+python --version
+```
+
+### 2. โหลดโค้ดชุดนี้ลงเครื่อง
+
+เลือกวิธีใดวิธีหนึ่ง:
+
+**แบบไม่ต้องลง Git (ง่ายสุด)** — กดปุ่ม "Code" → "Download ZIP" ที่หน้า repo นี้
+บน GitHub แล้วแตกไฟล์ zip ออกมา
+
+**แบบใช้คำสั่ง (ต้องลง Git ก่อน)** — โหลด Git จาก
+[git-scm.com/download/win](https://git-scm.com/download/win) หรือถ้ามี winget:
+
+```bash
+winget install --id Git.Git -e
+```
+
+จากนั้น clone repo:
+
+```bash
+git clone https://github.com/Aa-newbie/nasa-turbofan-rul-tutorial.git
+cd nasa-turbofan-rul-tutorial
+```
+
+### 3. ติดตั้งไลบรารีที่ต้องใช้
+
+เปิด terminal ในโฟลเดอร์ที่โหลดมา แล้วรัน:
 
 ```bash
 pip install pandas numpy scikit-learn matplotlib seaborn
 ```
+
+### 4. รันสคริปต์
 
 รันทั้งไฟล์:
 
@@ -29,7 +64,10 @@ pip install pandas numpy scikit-learn matplotlib seaborn
 python rul_tutorial.py
 ```
 
-หรือเปิดใน VS Code แล้วกด "Run Cell" ไล่ทีละ block เพื่อดูผลลัพธ์และกราฟทีละขั้น
+หรือ (แนะนำสำหรับการเรียนรู้) เปิดโฟลเดอร์นี้ด้วย **VS Code** แล้วติดตั้ง
+extension ชื่อ **"Python"** จากนั้นเปิดไฟล์ `rul_tutorial.py` จะเห็นปุ่ม
+"Run Cell" เหนือแต่ละ block (คั่นด้วย `# %%`) กดไล่ทีละ block เพื่อดู
+ผลลัพธ์และกราฟทีละขั้นตอน
 
 ## สิ่งที่ได้เรียนรู้
 
