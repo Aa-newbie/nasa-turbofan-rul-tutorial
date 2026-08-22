@@ -185,3 +185,54 @@ print("\nสรุปผล:")
 print(f"  Linear Regression  -> RMSE {rmse_lr:.2f}, MAE {mae_lr:.2f}")
 print(f"  Random Forest      -> RMSE {rmse_rf:.2f}, MAE {mae_rf:.2f}")
 print(f"\nรูปภาพทั้งหมดถูกบันทึกไว้ในโฟลเดอร์ '{OUT_DIR}/'")
+
+# %% [markdown]
+# ## 8) สร้างรายงานสรุปเป็นไฟล์ HTML
+#
+# ไฟล์นี้เปิดได้เองด้วยเบราว์เซอร์ทั่วไป (ดับเบิลคลิกได้เลย) ไม่ต้องพึ่งปุ่ม
+# Export ของ VS Code ซึ่งบางทีอาจใช้งานไม่ได้ (เพราะกราฟที่ savefig() ไว้
+# จะไม่ถูกแสดงใน Interactive Window ตั้งแต่แรก ปุ่ม Export เลย export ออกมา
+# ไม่มีรูป) วิธีนี้ฝังรูปภาพไว้ในไฟล์ HTML เดียวเลย จึงส่งให้เพื่อนไฟล์เดียวได้
+
+import base64
+
+def _img_to_base64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("ascii")
+
+report_images = [
+    ("อายุการใช้งานของแต่ละเครื่องยนต์", "01_engine_life_distribution.png"),
+    ("เทรนด์เซ็นเซอร์เทียบกับรอบการทำงาน", "02_sensor_trends.png"),
+    ("ค่าที่โมเดลทาย เทียบกับค่าจริง", "03_pred_vs_actual.png"),
+    ("ความสำคัญของฟีเจอร์ (Random Forest)", "04_feature_importance.png"),
+]
+
+img_html = ""
+for title, filename in report_images:
+    b64 = _img_to_base64(f"{OUT_DIR}/{filename}")
+    img_html += f'<h3>{title}</h3><img src="data:image/png;base64,{b64}" style="max-width:100%"><br>'
+
+report_html = f"""<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<title>RUL Prediction - รายงานผล</title>
+<style>
+body {{ font-family: "Leelawadee UI", Tahoma, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }}
+table {{ border-collapse: collapse; margin: 12px 0; }}
+td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
+</style></head>
+<body>
+<h1>รายงานผล: ทำนาย Remaining Useful Life (RUL)</h1>
+<h2>สรุปความแม่นยำของโมเดล</h2>
+<table>
+<tr><th>โมเดล</th><th>RMSE</th><th>MAE</th></tr>
+<tr><td>Linear Regression</td><td>{rmse_lr:.2f}</td><td>{mae_lr:.2f}</td></tr>
+<tr><td>Random Forest</td><td>{rmse_rf:.2f}</td><td>{mae_rf:.2f}</td></tr>
+</table>
+<h2>กราฟ</h2>
+{img_html}
+</body></html>"""
+
+with open("report.html", "w", encoding="utf-8") as f:
+    f.write(report_html)
+
+print("\nสร้างรายงานเสร็จแล้ว: เปิดไฟล์ report.html ด้วยเบราว์เซอร์เพื่อดูผลได้เลย")
