@@ -65,9 +65,14 @@ python rul_tutorial.py
 ```
 
 หรือ (แนะนำสำหรับการเรียนรู้) เปิดโฟลเดอร์นี้ด้วย **VS Code** แล้วติดตั้ง
-extension ชื่อ **"Python"** จากนั้นเปิดไฟล์ `rul_tutorial.py` จะเห็นปุ่ม
-"Run Cell" เหนือแต่ละ block (คั่นด้วย `# %%`) กดไล่ทีละ block เพื่อดู
-ผลลัพธ์และกราฟทีละขั้นตอน
+extension **2 ตัว** จากช่อง Extensions (`Ctrl+Shift+X`):
+- **"Python"** (โดย Microsoft)
+- **"Jupyter"** (โดย Microsoft) — ตัวนี้จำเป็นด้วย ถ้าลงแค่ Python extension
+  เฉยๆ จะไม่เห็นปุ่ม "Run Cell"
+
+ลงเสร็จแล้วปิด-เปิดไฟล์ `rul_tutorial.py` ใหม่ (หรือกด `Ctrl+Shift+P` พิมพ์
+"Reload Window") จะเห็นปุ่ม "Run Cell" ลอยอยู่เหนือแต่ละ block
+(คั่นด้วย `# %%`) กดไล่ทีละ block เพื่อดูผลลัพธ์และกราฟทีละขั้นตอน
 
 ## สิ่งที่ได้เรียนรู้
 
