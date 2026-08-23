@@ -205,7 +205,174 @@ print(f"  Random Forest      -> RMSE {rmse_rf:.2f}, MAE {mae_rf:.2f}")
 print(f"\nรูปภาพทั้งหมดถูกบันทึกไว้ในโฟลเดอร์ '{OUT_DIR}/'")
 
 # %% [markdown]
-# ## 8) สร้างรายงานสรุปเป็นไฟล์ HTML
+# ## 8) แบ่ง validation set ให้ถูกหลัก
+#
+# จนถึงตอนนี้เราวัดผลด้วย test set โดยตรง ซึ่ง "ใช้ดูผลครั้งเดียวตอนจบ" ได้ แต่ห้าม
+# ใช้เลือกโมเดล เพราะถ้าลองสิบแบบแล้วหยิบตัวที่ได้เลขสวยที่สุด เท่ากับเราค่อย ๆ ปรับ
+# ตัวเองให้เข้ากับข้อสอบ ตัวเลขในรายงานจะดูดีเกินความจริง
+#
+# วิธีที่ถูกคือกันเครื่องยนต์ส่วนหนึ่งจากชุด train ออกมาเป็น validation set
+# ใช้ชุดนั้นตัดสินใจทุกอย่าง แล้วค่อยแตะ test set ครั้งเดียวตอนท้าย
+#
+# **จุดสำคัญ: ต้องแบ่งตาม "เครื่องยนต์" ไม่ใช่ตาม "แถว"** ถ้าสุ่มทีละแถว รอบที่ 100
+# กับรอบที่ 101 ของเครื่องเดียวกันจะกระจายไปคนละฝั่ง ทั้งที่สองแถวนั้นแทบเหมือนกัน
+# แต่เหตุผลที่หนักแน่นกว่าคือ มันไม่ตรงกับโจทย์จริง ที่เราต้องทำนายเครื่องยนต์
+# "ตัวใหม่ที่ไม่เคยเห็นทั้งเครื่อง" ไม่ใช่เติมช่องว่างของเครื่องที่รู้จักอยู่แล้ว
+
+from sklearn.ensemble import HistGradientBoostingRegressor
+
+VAL_UNITS = 20
+rng = np.random.default_rng(42)
+shuffled_units = rng.permutation(train["unit_number"].unique())
+val_units, fit_units = shuffled_units[:VAL_UNITS], shuffled_units[VAL_UNITS:]
+
+fit_df = train[train["unit_number"].isin(fit_units)]
+val_df = train[train["unit_number"].isin(val_units)]
+
+
+# ชุด validation ต้องจำลองเงื่อนไขเดียวกับ test set คือ "ถูกตัดจบกลางคัน"
+# ถ้าหยิบแถวสุดท้ายของแต่ละเครื่องมาตรง ๆ RUL จะเป็น 0 หมดทุกตัว (เพราะ train
+# วิ่งจนพังจริง) กลายเป็นชุดวัดผลที่ไร้ประโยชน์ จึงต้องสุ่มจุดตัดเลียนแบบที่ NASA ทำ
+def cut_at_random(df, seed=42):
+    r = np.random.default_rng(seed)
+    rows = [g.iloc[r.integers(len(g) // 4, len(g))] for _, g in df.groupby("unit_number")]
+    return pd.DataFrame(rows)
+
+
+val_cut = cut_at_random(val_df)
+print(f"เทรนด้วย {len(fit_units)} เครื่อง / วัดผลด้วย {len(val_units)} เครื่องที่ไม่เคยเห็น")
+print("ช่วง RUL ของ validation set:", val_cut["RUL"].min(), "-", val_cut["RUL"].max())
+
+# %% [markdown]
+# ## 9) โมเดลที่ 3: HistGradientBoosting
+#
+# Gradient Boosting ปลูกต้นไม้ทีละต้น โดยให้ต้นใหม่คอยแก้ความผิดพลาดที่ต้นก่อนหน้า
+# ทำไว้ ต่างจาก Random Forest ที่ปลูกทุกต้นพร้อมกันแล้วเฉลี่ยผล การแก้ต่อกันเป็นทอด ๆ
+# แบบนี้มักให้ความแม่นสูงกว่า และเวอร์ชัน "Hist" ของ sklearn เร็วเป็นพิเศษเพราะ
+# จัดค่าตัวเลขเป็นช่วง ๆ (histogram) ก่อนคำนวณ แทนที่จะไล่ดูทุกค่า
+#
+# ตัวนี้ติดมากับ sklearn อยู่แล้ว ไม่ต้องติดตั้งไลบรารีเพิ่ม
+
+
+def evaluate(model, X_fit, y_fit, X_eval, y_eval):
+    """เทรนโมเดลแล้วคืนค่า (RMSE, MAE)"""
+    model.fit(X_fit, y_fit)
+    pred = model.predict(X_eval)
+    return mean_squared_error(y_eval, pred) ** 0.5, mean_absolute_error(y_eval, pred)
+
+
+def make_models():
+    """สร้างโมเดลชุดใหม่ทุกครั้ง เพื่อไม่ให้ตัวที่เทรนไปแล้วปนกัน"""
+    return {
+        "Linear Regression": LinearRegression(),
+        "Random Forest": RandomForestRegressor(n_estimators=200, max_depth=8,
+                                               random_state=42, n_jobs=-1),
+        "HistGradientBoosting": HistGradientBoostingRegressor(random_state=42),
+    }
+
+
+print("\n--- วัดผลบน validation set (ฟีเจอร์ดิบ 18 ตัว) ---")
+val_scores_base = {}
+for name, model in make_models().items():
+    rmse, mae = evaluate(model, fit_df[feature_cols], fit_df["RUL"],
+                         val_cut[feature_cols], val_cut["RUL"])
+    val_scores_base[name] = rmse
+    print(f"  {name:<22} RMSE = {rmse:6.2f}  MAE = {mae:6.2f}")
+
+# %% [markdown]
+# ## 10) Feature Engineering: ให้โมเดลเห็น "ประวัติ" ไม่ใช่แค่ภาพนิ่ง
+#
+# นี่คือจุดที่ให้ผลตอบแทนสูงที่สุดในบทเรียนนี้ มากกว่าการเปลี่ยนอัลกอริทึมเสียอีก
+#
+# ปัญหาของทุกอย่างที่ทำมา: โมเดลเห็นข้อมูลแต่ละแถวแบบโดดเดี่ยว มันรู้ว่า "ตอนนี้
+# s_11 = 47.5" แต่ไม่รู้ว่าเมื่อ 20 รอบก่อนเป็นเท่าไหร่ ทั้งที่ข้อมูลชุดนี้เป็น
+# time-series และ **อัตราการเปลี่ยนแปลงคือสัญญาณการเสื่อมสภาพตัวจริง**
+#
+# ย้อนกลับไปดูกราฟเทรนด์เซ็นเซอร์ในหัวข้อที่ 2 จะเห็นว่าเส้นค่อย ๆ ไต่ขึ้นและแกว่ง
+# มากขึ้นเมื่อใกล้พัง เราจึงสร้างฟีเจอร์ที่จับสองอย่างนี้ออกมาตรง ๆ:
+#
+# | ฟีเจอร์ | ความหมาย |
+# |---|---|
+# | `_mean20` | ค่าเฉลี่ย 20 รอบล่าสุด — กรอง noise ออก เห็นแนวโน้มชัดขึ้น |
+# | `_std20`  | ความแกว่ง 20 รอบล่าสุด — เครื่องใกล้พังมักอ่านค่าไม่นิ่ง |
+# | `_delta`  | ต่างจากตอนเครื่องใหม่เท่าไหร่ — วัดว่าเสื่อมไปไกลแค่ไหนแล้ว |
+#
+# ทั้งสามคำนวณจาก "อดีตของเครื่องนั้นเอง" เท่านั้น ไม่ได้แอบดูอนาคต จึงไม่เป็น
+# data leakage และคำนวณกับชุด test ได้เหมือนกันทุกประการ
+
+WINDOW = 20
+
+
+def add_window_features(df, cols, window=WINDOW):
+    """เพิ่มฟีเจอร์ที่สรุปประวัติย้อนหลังของเครื่องยนต์แต่ละเครื่อง"""
+    df = df.copy()
+    grp = df.groupby("unit_number")[cols]
+    parts = [df]
+    for stat in ["mean", "std"]:
+        rolled = grp.rolling(window, min_periods=1).agg(stat)
+        rolled = rolled.reset_index(level=0, drop=True)
+        rolled.columns = [f"{c}_{stat}{window}" for c in cols]
+        parts.append(rolled)
+    delta = df[cols] - grp.transform("first")
+    delta.columns = [f"{c}_delta" for c in cols]
+    parts.append(delta)
+    return pd.concat(parts, axis=1).fillna(0)
+
+
+train_w = add_window_features(train, feature_cols)
+test_w = add_window_features(test, feature_cols)
+feature_cols_w = [c for c in train_w.columns if c not in drop_cols]
+print(f"\nฟีเจอร์เพิ่มจาก {len(feature_cols)} ตัว เป็น {len(feature_cols_w)} ตัว")
+
+# ใช้เครื่องยนต์ชุดเดิมในการแบ่ง เพื่อให้เทียบกับผลก่อนหน้าได้อย่างเป็นธรรม
+fit_w = train_w[train_w["unit_number"].isin(fit_units)]
+val_w_cut = cut_at_random(train_w[train_w["unit_number"].isin(val_units)])
+
+print("\n--- วัดผลบน validation set (ฟีเจอร์ + window) ---")
+val_scores_win = {}
+for name, model in make_models().items():
+    rmse, mae = evaluate(model, fit_w[feature_cols_w], fit_w["RUL"],
+                         val_w_cut[feature_cols_w], val_w_cut["RUL"])
+    val_scores_win[name] = rmse
+    diff = rmse - val_scores_base[name]
+    print(f"  {name:<22} RMSE = {rmse:6.2f}  MAE = {mae:6.2f}   ({diff:+.2f} จากเดิม)")
+
+# %% [markdown]
+# ## 11) ตัดสินใจครั้งเดียว แล้ววัดผลจริงบน test set
+#
+# ถึงตรงนี้เราเลือกทั้งโมเดลและชุดฟีเจอร์จาก validation set ล้วน ๆ โดยไม่เคยแตะ
+# test set เลย ขั้นสุดท้ายคือ **เทรนใหม่ด้วยเครื่องยนต์ทั้ง 100 เครื่อง** (ยิ่งข้อมูล
+# เยอะยิ่งดี และไม่ต้องกัน validation ไว้แล้วเพราะตัดสินใจเสร็จแล้ว) จากนั้นวัดกับ
+# test set ครั้งเดียว
+#
+# ตัวเลขที่ได้ตรงนี้คือตัวเลขที่เอาไปรายงานได้อย่างซื่อสัตย์
+
+best_name = min(val_scores_win, key=val_scores_win.get)
+print(f"\nโมเดลที่ validation บอกว่าดีที่สุด: {best_name}")
+
+test_w_last = test_w.groupby("unit_number").last().reset_index()
+final_model = make_models()[best_name]
+rmse_final, mae_final = evaluate(final_model, train_w[feature_cols_w], train_w["RUL"],
+                                 test_w_last[feature_cols_w], y_test)
+
+print("\n=== ผลสุดท้ายบน test set ===")
+print(f"  Linear Regression (ฟีเจอร์ดิบ)   RMSE = {rmse_lr:6.2f}  MAE = {mae_lr:6.2f}")
+print(f"  Random Forest (ฟีเจอร์ดิบ)       RMSE = {rmse_rf:6.2f}  MAE = {mae_rf:6.2f}")
+print(f"  {best_name} + window  RMSE = {rmse_final:6.2f}  MAE = {mae_final:6.2f}")
+
+plt.figure(figsize=(7, 4))
+bar_names = ["Linear\nRegression", "Random\nForest", f"{best_name}\n+ window"]
+bar_values = [rmse_lr, rmse_rf, rmse_final]
+bars = plt.bar(bar_names, bar_values, color=["#9aa5b1", "#6b8cae", "#2f6f4e"])
+plt.bar_label(bars, fmt="%.2f", padding=3)
+plt.ylabel("RMSE (ยิ่งน้อยยิ่งดี)")
+plt.title("เปรียบเทียบความแม่นยำบน test set")
+plt.tight_layout()
+plt.savefig(f"{OUT_DIR}/05_model_comparison.png", dpi=120)
+plt.close()
+
+# %% [markdown]
+# ## 12) สร้างรายงานสรุปเป็นไฟล์ HTML
 #
 # ไฟล์นี้เปิดได้เองด้วยเบราว์เซอร์ทั่วไป (ดับเบิลคลิกได้เลย) ไม่ต้องพึ่งปุ่ม
 # Export ของ VS Code ซึ่งบางทีอาจใช้งานไม่ได้ (เพราะกราฟที่ savefig() ไว้
@@ -223,6 +390,7 @@ report_images = [
     ("เทรนด์เซ็นเซอร์เทียบกับรอบการทำงาน", "02_sensor_trends.png"),
     ("ค่าที่โมเดลทาย เทียบกับค่าจริง", "03_pred_vs_actual.png"),
     ("ความสำคัญของฟีเจอร์ (Random Forest)", "04_feature_importance.png"),
+    ("เปรียบเทียบความแม่นยำของทุกโมเดล", "05_model_comparison.png"),
 ]
 
 img_html = ""
@@ -243,8 +411,9 @@ td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
 <h2>สรุปความแม่นยำของโมเดล</h2>
 <table>
 <tr><th>โมเดล</th><th>RMSE</th><th>MAE</th></tr>
-<tr><td>Linear Regression</td><td>{rmse_lr:.2f}</td><td>{mae_lr:.2f}</td></tr>
-<tr><td>Random Forest</td><td>{rmse_rf:.2f}</td><td>{mae_rf:.2f}</td></tr>
+<tr><td>Linear Regression (ฟีเจอร์ดิบ)</td><td>{rmse_lr:.2f}</td><td>{mae_lr:.2f}</td></tr>
+<tr><td>Random Forest (ฟีเจอร์ดิบ)</td><td>{rmse_rf:.2f}</td><td>{mae_rf:.2f}</td></tr>
+<tr><td><b>{best_name} + window</b></td><td><b>{rmse_final:.2f}</b></td><td><b>{mae_final:.2f}</b></td></tr>
 </table>
 <h2>กราฟ</h2>
 {img_html}

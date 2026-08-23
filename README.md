@@ -106,7 +106,24 @@ extension **2 ตัว** จากช่อง Extensions (`Ctrl+Shift+X`):
 ## สิ่งที่ได้เรียนรู้
 
 1. การโหลด/สำรวจข้อมูล time-series แบบ multivariate
-2. การสร้าง label (RUL) เองจากข้อมูลดิบ
+2. การสร้าง label (RUL) เองจากข้อมูลดิบ และเทคนิค clip แบบ piecewise linear
 3. การเลือกฟีเจอร์ (ตัดเซ็นเซอร์ที่ไม่มีประโยชน์)
-4. การเทรนและเปรียบเทียบโมเดล Linear Regression กับ Random Forest
+4. การเทรนและเปรียบเทียบโมเดล 3 แบบ — Linear Regression, Random Forest,
+   HistGradientBoosting
 5. การประเมินผลด้วย RMSE/MAE และดู feature importance
+6. การแบ่ง validation set ให้ถูกหลัก (แบ่งตามเครื่องยนต์ ไม่ใช่ตามแถว) และ
+   เหตุผลที่ห้ามใช้ test set เลือกโมเดล
+7. Feature engineering แบบ rolling window เพื่อให้โมเดลเห็นแนวโน้มตามเวลา
+
+## ผลลัพธ์
+
+วัดบน test set ของ FD001 (100 เครื่องยนต์) — ยิ่ง RMSE น้อยยิ่งดี
+
+| โมเดล | ฟีเจอร์ | RMSE | MAE |
+|---|---|---|---|
+| Linear Regression | ดิบ 18 ตัว | 20.83 | 16.57 |
+| Random Forest | ดิบ 18 ตัว | 17.48 | 12.48 |
+| **HistGradientBoosting** | **+ window 72 ตัว** | **13.48** | **9.82** |
+
+ข้อสังเกตที่เป็นบทเรียนหลัก: การเพิ่มฟีเจอร์ที่จับแนวโน้มตามเวลา ช่วยได้มากกว่า
+การเปลี่ยนอัลกอริทึมหลายเท่า
