@@ -74,21 +74,12 @@ print(cycles_per_unit.describe())
 plt.figure(figsize=(8, 4))
 cycles_per_unit.sort_values().plot(kind="bar", width=0.9)
 
-# ลากเส้นสูงสุด/เฉลี่ย/ต่ำสุดพาดไว้ ให้เห็นช่วงการกระจายของอายุเครื่องยนต์ชัด ๆ
+# ลากเส้นค่าเฉลี่ยพาดไว้ เพื่อให้เห็นว่าเครื่องไหนอายุสั้น/ยาวกว่าค่ากลางแค่ไหน
 mean_cycles = cycles_per_unit.mean()
-min_cycles = cycles_per_unit.min()
-max_cycles = cycles_per_unit.max()
-
-ref_lines = [
-    plt.axhline(max_cycles, color="darkorange", linestyle=":", linewidth=1.5,
-                label=f"สูงสุด {max_cycles:.0f} รอบ"),
-    plt.axhline(mean_cycles, color="crimson", linestyle="--", linewidth=1.5,
-                label=f"ค่าเฉลี่ย {mean_cycles:.0f} รอบ"),
-    plt.axhline(min_cycles, color="seagreen", linestyle=":", linewidth=1.5,
-                label=f"ต่ำสุด {min_cycles:.0f} รอบ"),
-]
+mean_line = plt.axhline(mean_cycles, color="crimson", linestyle="--", linewidth=1.5,
+                        label=f"ค่าเฉลี่ย {mean_cycles:.0f} รอบ")
 # ระบุ handle เอง ไม่งั้น legend จะแถมชื่อคอลัมน์ "time_cycles" ของแท่งมาด้วย
-plt.legend(handles=ref_lines)
+plt.legend(handles=[mean_line])
 
 plt.xticks([])
 plt.xlabel("เครื่องยนต์ (เรียงตามอายุ)")
