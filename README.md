@@ -14,7 +14,9 @@ Dataset ต้นทาง: [NASA Turbofan Engine Degradation Simulation (Kaggle
 - [`rul_tutorial.py`](rul_tutorial.py) — สคริปต์บทเรียนแบบ step-by-step
   (ใช้ `# %%` แบ่ง cell รันทีละส่วนได้ใน VS Code + Python extension)
 - [`plots/`](plots/) — กราฟผลลัพธ์ตัวอย่างจากการรันสคริปต์
+- [`rul_lstm.py`](rul_lstm.py) — บทเรียนต่อยอด ทำนาย RUL ด้วย LSTM (PyTorch)
 - [`requirements.txt`](requirements.txt) — รายการไลบรารีพร้อมเวอร์ชันที่ตรึงไว้
+- [`requirements-lstm.txt`](requirements-lstm.txt) — ไลบรารีเพิ่มเติมสำหรับบทเรียน LSTM
 
 ## การติดตั้ง (สำหรับมือใหม่)
 
@@ -124,6 +126,27 @@ extension **2 ตัว** จากช่อง Extensions (`Ctrl+Shift+X`):
 | Linear Regression | ดิบ 18 ตัว | 20.83 | 16.57 |
 | Random Forest | ดิบ 18 ตัว | 17.48 | 12.48 |
 | **HistGradientBoosting** | **+ window 72 ตัว** | **13.48** | **9.82** |
+| LSTM *(rul_lstm.py)* | ลำดับ 30 รอบ | 12.94 | 9.60 |
 
 ข้อสังเกตที่เป็นบทเรียนหลัก: การเพิ่มฟีเจอร์ที่จับแนวโน้มตามเวลา ช่วยได้มากกว่า
-การเปลี่ยนอัลกอริทึมหลายเท่า
+การเปลี่ยนอัลกอริทึมหลายเท่า — RMSE ลดจาก 17.48 เหลือ 13.48 ด้วยการทำ feature
+engineering อย่างเดียว
+
+และที่น่าสนใจกว่านั้น LSTM ซึ่งกินเวลาเทรนหลักนาทีและต้องลง PyTorch เพิ่มอีก
+200 MB ทำได้ 12.94 — ดีกว่าเพียงเล็กน้อยเท่านั้น สำหรับ dataset ขนาดนี้
+โมเดลที่เรียบง่ายกว่าและอธิบายให้วิศวกรเข้าใจได้ง่ายกว่า จึงอาจเป็นทางเลือก
+ที่เหมาะกว่าในทางปฏิบัติ
+
+## บทเรียน LSTM (ไม่บังคับ)
+
+ถ้าอยากลองแนวทาง deep learning ต่อ:
+
+```bash
+pip install -r requirements-lstm.txt
+python rul_lstm.py
+```
+
+ไฟล์ [`rul_lstm.py`](rul_lstm.py) แยกจากบทเรียนหลักเพราะใช้โครงสร้างข้อมูล
+คนละแบบ (3 มิติ: ตัวอย่าง × เวลา × เซ็นเซอร์) และอธิบายเรื่องที่เฉพาะกับ
+neural network เช่น การ normalize, sliding window, วงจรการเทรนของ PyTorch
+และการอ่านกราฟ train/validation

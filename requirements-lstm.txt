@@ -1,0 +1,12 @@
+# ไลบรารีเพิ่มเติมสำหรับ rul_lstm.py เท่านั้น (บทเรียนหลักไม่ต้องใช้)
+# ตัวนี้ขนาดใหญ่ราว 200 MB จึงแยกไฟล์ไว้ ไม่รวมใน requirements.txt
+#
+# ติดตั้งด้วย:
+#   pip install -r requirements-lstm.txt
+#
+# หมายเหตุ: บรรทัดล่างระบุ index ของ PyTorch เวอร์ชัน CPU โดยเฉพาะ
+# ถ้าเครื่องมีการ์ดจอ NVIDIA และอยากใช้ GPU ให้ลบบรรทัด --index-url ออก
+# (จะได้ตัว CUDA ซึ่งใหญ่กว่ามาก ~2.5 GB)
+
+--index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0
