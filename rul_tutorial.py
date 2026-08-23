@@ -11,6 +11,16 @@
 # %%
 import pandas as pd
 import numpy as np
+import sys
+import matplotlib
+
+# สคริปต์นี้เซฟกราฟลงไฟล์อย่างเดียว ไม่ได้เปิดหน้าต่างโชว์กราฟ ตอนรันทั้งไฟล์
+# จาก terminal จึงสั่งใช้ backend "Agg" ที่ไม่ต้องใช้หน้าต่าง ไม่งั้น Tk จะพ่น
+# RuntimeError ตอนปิดโปรแกรม ส่วนตอนกด Run Cell ปล่อยให้ Jupyter เลือก backend
+# เองเพื่อให้กราฟแสดง inline ได้ตามปกติ
+if "ipykernel" not in sys.modules:
+    matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
