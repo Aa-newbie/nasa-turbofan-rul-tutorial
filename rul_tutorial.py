@@ -233,14 +233,29 @@ val_df = train[train["unit_number"].isin(val_units)]
 # ชุด validation ต้องจำลองเงื่อนไขเดียวกับ test set คือ "ถูกตัดจบกลางคัน"
 # ถ้าหยิบแถวสุดท้ายของแต่ละเครื่องมาตรง ๆ RUL จะเป็น 0 หมดทุกตัว (เพราะ train
 # วิ่งจนพังจริง) กลายเป็นชุดวัดผลที่ไร้ประโยชน์ จึงต้องสุ่มจุดตัดเลียนแบบที่ NASA ทำ
-def cut_at_random(df, seed=42):
+#
+# และต้องสุ่ม "หลายจุดต่อเครื่อง" ด้วย ถ้าเอาเครื่องละจุดจะได้ตัวอย่างแค่ 20 ตัว
+# ซึ่งน้อยเกินกว่าจะวัดอะไรได้นิ่ง ๆ — ทดลองเปลี่ยนแค่ seed ของจุดตัดแล้ว RMSE
+# แกว่งได้ถึง 5 หน่วย ซึ่งกว้างกว่าความต่างระหว่างโมเดลทุกตัวที่เราเทียบกันเสียอีก
+# เท่ากับเครื่องมือวัดหยาบกว่าสิ่งที่จะวัด พอเพิ่มเป็น 30 จุดต่อเครื่อง ความแกว่ง
+# เหลือราว 0.3 จึงเริ่มเชื่อถือได้
+VAL_CUTS_PER_UNIT = 30
+
+
+def cut_at_random(df, n_cuts=VAL_CUTS_PER_UNIT, seed=42):
+    """สุ่มจุดตัดหลายจุดต่อเครื่อง เลียนแบบวิธีสร้างชุด test ของ NASA"""
     r = np.random.default_rng(seed)
-    rows = [g.iloc[r.integers(len(g) // 4, len(g))] for _, g in df.groupby("unit_number")]
-    return pd.DataFrame(rows)
+    rows = []
+    for _, g in df.groupby("unit_number"):
+        picked = np.unique(r.integers(len(g) // 4, len(g), size=n_cuts))
+        rows.append(g.iloc[picked])
+    return pd.concat(rows)
 
 
 val_cut = cut_at_random(val_df)
 print(f"เทรนด้วย {len(fit_units)} เครื่อง / วัดผลด้วย {len(val_units)} เครื่องที่ไม่เคยเห็น")
+print(f"ขนาด validation set: {len(val_cut)} ตัวอย่าง "
+      f"(สุ่มจุดตัดเครื่องละไม่เกิน {VAL_CUTS_PER_UNIT} จุด)")
 print("ช่วง RUL ของ validation set:", val_cut["RUL"].min(), "-", val_cut["RUL"].max())
 
 # %% [markdown]
@@ -372,7 +387,135 @@ plt.savefig(f"{OUT_DIR}/05_model_comparison.png", dpi=120)
 plt.close()
 
 # %% [markdown]
-# ## 12) สร้างรายงานสรุปเป็นไฟล์ HTML
+# ## 12) รายงานผลให้ซื่อสัตย์: หลาย seed + ผสมโมเดล
+#
+# ตัวเลข RMSE ที่ได้จากการรันครั้งเดียวเชื่อไม่ได้เต็มร้อย เพราะโมเดลกลุ่มต้นไม้มี
+# การสุ่มอยู่ข้างใน (สุ่มเลือกข้อมูลและฟีเจอร์ตอนปลูกแต่ละต้น) เปลี่ยนแค่
+# `random_state` ผลก็ขยับแล้ว
+#
+# หัวข้อนี้ทำสองอย่างที่ควรทำก่อนเอาตัวเลขไปใส่รายงาน:
+#
+# 1. **รันหลาย seed แล้วรายงานค่าเฉลี่ย ± ส่วนเบี่ยงเบน** แทนเลขเดี่ยว
+# 2. **ผสมโมเดล (ensemble)** เฉลี่ยคำทำนายของหลายโมเดล ซึ่งมักได้ผลดีกว่าและ
+#    เสถียรกว่าโมเดลเดี่ยว เพราะแต่ละตัวผิดคนละแบบ ความผิดพลาดจึงหักล้างกันบางส่วน
+
+from sklearn.ensemble import ExtraTreesRegressor
+
+SEEDS = [0, 1, 2, 3, 4]
+
+
+def models_for_seed(seed):
+    return {
+        "HistGradientBoosting": HistGradientBoostingRegressor(random_state=seed),
+        "Random Forest": RandomForestRegressor(n_estimators=200, max_depth=8,
+                                               random_state=seed, n_jobs=-1),
+        "Extra Trees": ExtraTreesRegressor(n_estimators=200, max_depth=8,
+                                           random_state=seed, n_jobs=-1),
+    }
+
+
+def run_seeds(X_fit, y_fit, X_eval, y_eval):
+    """เทรนทุกโมเดลด้วยหลาย seed แล้วคืน RMSE ของแต่ละตัว รวมทั้งแบบผสม"""
+    scores = {name: [] for name in models_for_seed(0)}
+    scores["Ensemble (เฉลี่ย 3 ตัว)"] = []
+    for seed in SEEDS:
+        preds = {}
+        for name, model in models_for_seed(seed).items():
+            model.fit(X_fit, y_fit)
+            preds[name] = np.clip(model.predict(X_eval), 0, RUL_CLIP)
+            scores[name].append(mean_squared_error(y_eval, preds[name]) ** 0.5)
+        ens = np.mean(list(preds.values()), axis=0)
+        scores["Ensemble (เฉลี่ย 3 ตัว)"].append(mean_squared_error(y_eval, ens) ** 0.5)
+    return scores
+
+
+def summarise(scores, title):
+    print(f"\n{title}")
+    print(f"  {'โมเดล':<26}{'เฉลี่ย':>9}{'± s.d.':>9}{'ต่ำสุด-สูงสุด':>18}")
+    print("  " + "-" * 60)
+    for name, v in scores.items():
+        v = np.array(v)
+        print(f"  {name:<26}{v.mean():>9.2f}{v.std():>9.2f}"
+              f"{f'{v.min():.2f} - {v.max():.2f}':>18}")
+    return {k: float(np.mean(v)) for k, v in scores.items()}
+
+
+# --- ตัดสินใจบน validation ตามเดิม ---
+val_scores = run_seeds(fit_w[feature_cols_w], fit_w["RUL"],
+                       val_w_cut[feature_cols_w], val_w_cut["RUL"])
+val_mean = summarise(val_scores, f"--- validation set ({len(SEEDS)} seeds) ---")
+
+# กฎการเลือก ประกาศไว้ก่อนดูผล test:
+#   1. เอาตัวที่ RMSE เฉลี่ยต่ำสุดเป็นตัวตั้ง
+#   2. ถ้ามีตัวอื่นห่างไม่เกิน TIE_MARGIN ถือว่า "เสมอกัน" ในทางสถิติ
+#      แล้วเลือกตัวที่ส่วนเบี่ยงเบนต่ำที่สุดในกลุ่มที่เสมอกันแทน
+#
+# เหตุผล: เมื่อความแม่นพอ ๆ กัน โมเดลที่ผลไม่แกว่งตาม seed ย่อมน่าเชื่อถือกว่า
+# ทำซ้ำได้จริงกว่า และเป็นเกณฑ์ที่ป้องกันไม่ให้เราไปเลือกตัวที่บังเอิญได้ seed ดี
+TIE_MARGIN = 0.5
+
+leader = min(val_mean, key=val_mean.get)
+tied = [n for n, m in val_mean.items() if m - val_mean[leader] <= TIE_MARGIN]
+champion = min(tied, key=lambda n: float(np.std(val_scores[n])))
+
+if len(tied) > 1:
+    print(f"\n  เสมอกันภายใน {TIE_MARGIN} RMSE: {', '.join(tied)}")
+    print(f"  ตัดสินด้วยความเสถียร (s.d. ต่ำสุด)")
+print(f"\n  >>> validation เลือก: {champion}")
+
+# %% [markdown]
+# ### วัดผลบน test set
+#
+# ตารางข้างล่างแสดงทุกโมเดลเพื่อการเรียนรู้ แต่ **ตัวที่เราเลือกถูกตัดสินจาก
+# validation ไปแล้ว** การเห็นตัวเลข test ของตัวอื่นไม่ใช่ใบอนุญาตให้ย้อนกลับไป
+# เปลี่ยนใจ — ถ้าทำแบบนั้นก็กลับไปเป็นการเลือกจากข้อสอบอีก
+#
+# สิ่งที่ตัวเลขชุดนี้บอกได้อย่างซื่อสัตย์คือ **ความไม่แน่นอนของผล** ซึ่งเป็นสิ่งที่
+# ต้องรายงานคู่กับค่าเฉลี่ยเสมอ
+
+test_scores = run_seeds(train_w[feature_cols_w], train_w["RUL"],
+                        test_w_last[feature_cols_w], y_test)
+test_mean = summarise(test_scores, f"--- test set ({len(SEEDS)} seeds) ---")
+
+champ = np.array(test_scores[champion])
+print(f"\n  ผลที่ควรรายงานในเล่ม: {champion} -> RMSE {champ.mean():.2f} ± {champ.std():.2f}")
+print(f"  (เทียบกับการรายงานเลขเดี่ยวจากการรันครั้งเดียว ซึ่งอาจได้ตั้งแต่ "
+      f"{champ.min():.2f} ถึง {champ.max():.2f} แล้วแต่ดวง)")
+
+# %%
+plt.figure(figsize=(8, 4.5))
+names = list(test_scores)
+means = [np.mean(test_scores[n]) for n in names]
+stds = [np.std(test_scores[n]) for n in names]
+colors = ["#2f6f4e" if n == champion else "#9aa5b1" for n in names]
+
+plt.bar(range(len(names)), means, yerr=stds, capsize=6, color=colors)
+for i, (m, s) in enumerate(zip(means, stds)):
+    plt.text(i, m + s + 0.15, f"{m:.2f}\n±{s:.2f}", ha="center", fontsize=9)
+plt.xticks(range(len(names)), [n.replace(" (", "\n(") for n in names], fontsize=9)
+plt.ylabel("RMSE (ยิ่งน้อยยิ่งดี)")
+plt.ylim(0, max(m + s for m, s in zip(means, stds)) * 1.25)
+plt.title(f"ความแม่นยำบน test set — เฉลี่ยจาก {len(SEEDS)} seed พร้อมแถบความคลาดเคลื่อน")
+plt.tight_layout()
+plt.savefig(f"{OUT_DIR}/07_seed_variance.png", dpi=120)
+plt.close()
+
+# %% [markdown]
+# ### ข้อควรรู้เรื่องความไม่แน่นอน
+#
+# นอกจากความสุ่มของโมเดลแล้ว ยังมีความไม่แน่นอนอีกชั้นที่ใหญ่กว่ามาก:
+# **test set มีเครื่องยนต์แค่ 100 เครื่อง**
+#
+# ถ้าประมาณด้วยวิธี bootstrap (สุ่มเลือกเครื่องยนต์มาวัดซ้ำหลายพันรอบ) จะพบว่า
+# ช่วงความเชื่อมั่น 95% ของ RMSE กว้างราว ±2.3 ซึ่งกว้างกว่าความต่างระหว่าง
+# โมเดลทุกตัวในตารางข้างบน
+#
+# **สรุปที่ควรจำ: ถ้าโมเดลสองตัวต่างกันไม่ถึง 1 RMSE บนข้อมูลชุดนี้ ยังสรุปไม่ได้
+# ว่าตัวไหนดีกว่า** — ในเล่มควรเขียนว่า "ให้ผลใกล้เคียงกัน" แทนที่จะประกาศผู้ชนะ
+# เพราะถ้ากรรมการถามว่าต่างกันอย่างมีนัยสำคัญไหม จะได้ตอบได้
+
+# %% [markdown]
+# ## 13) สร้างรายงานสรุปเป็นไฟล์ HTML
 #
 # ไฟล์นี้เปิดได้เองด้วยเบราว์เซอร์ทั่วไป (ดับเบิลคลิกได้เลย) ไม่ต้องพึ่งปุ่ม
 # Export ของ VS Code ซึ่งบางทีอาจใช้งานไม่ได้ (เพราะกราฟที่ savefig() ไว้
@@ -391,12 +534,18 @@ report_images = [
     ("ค่าที่โมเดลทาย เทียบกับค่าจริง", "03_pred_vs_actual.png"),
     ("ความสำคัญของฟีเจอร์ (Random Forest)", "04_feature_importance.png"),
     ("เปรียบเทียบความแม่นยำของทุกโมเดล", "05_model_comparison.png"),
+    ("ความไม่แน่นอนของผล เมื่อรันหลาย seed", "07_seed_variance.png"),
 ]
 
 img_html = ""
 for title, filename in report_images:
     b64 = _img_to_base64(f"{OUT_DIR}/{filename}")
     img_html += f'<h3>{title}</h3><img src="data:image/png;base64,{b64}" style="max-width:100%"><br>'
+
+seed_rows = "".join(
+    f'<tr><td>{n}</td><td>{np.mean(v):.2f}</td><td>{np.std(v):.2f}</td></tr>'
+    for n, v in test_scores.items()
+)
 
 report_html = f"""<!doctype html>
 <html lang="th"><head><meta charset="utf-8">
@@ -414,6 +563,11 @@ td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
 <tr><td>Linear Regression (ฟีเจอร์ดิบ)</td><td>{rmse_lr:.2f}</td><td>{mae_lr:.2f}</td></tr>
 <tr><td>Random Forest (ฟีเจอร์ดิบ)</td><td>{rmse_rf:.2f}</td><td>{mae_rf:.2f}</td></tr>
 <tr><td><b>{best_name} + window</b></td><td><b>{rmse_final:.2f}</b></td><td><b>{mae_final:.2f}</b></td></tr>
+</table>
+<h2>ผลที่รายงานอย่างซื่อสัตย์ (เฉลี่ยจาก {len(SEEDS)} seed)</h2>
+<table>
+<tr><th>โมเดล</th><th>RMSE เฉลี่ย</th><th>± s.d.</th></tr>
+{seed_rows}
 </table>
 <h2>กราฟ</h2>
 {img_html}
