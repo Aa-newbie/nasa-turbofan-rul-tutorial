@@ -760,6 +760,20 @@ img {{ border-radius: 8px; border: 1px solid var(--border); }}
 </div>
 
 <div class="card">
+<h2>จุดเริ่มต้นของบทเรียน <span class="badge badge-test">Test set</span></h2>
+<p class="note">ก่อนจะรู้จัก window feature หรือ validation set ด้วยซ้ำ บทเรียนนี้
+เริ่มจากโมเดลง่ายที่สุด 2 ตัว เทรนด้วย train ทั้งหมด วัดกับ test set ตรงๆ เพื่อตั้ง
+เป็น "เส้นฐาน" (baseline) เทียบกับโมเดลที่พัฒนาต่อในตารางถัดไป</p>
+<table>
+<tr><th>โมเดล</th><th>RMSE</th><th>MAE</th></tr>
+<tr><td>Linear Regression</td><td>{rmse_lr:.2f}</td><td>{mae_lr:.2f}</td></tr>
+<tr><td>Random Forest</td><td>{rmse_rf:.2f}</td><td>{mae_rf:.2f}</td></tr>
+</table>
+<p class="note">ทั้งสองตัวนี้แพ้ทุกโมเดลในตารางถัดไป (ที่ต่ำสุดคือ ~13) เพราะยังไม่มี
+window feature — เก็บไว้ให้เห็นว่าพัฒนาไปได้ไกลแค่ไหนจากจุดเริ่มต้นง่าย ๆ นี้</p>
+</div>
+
+<div class="card">
 <h2>โมเดลไหนวัดกับอะไร — ตารางเดียวจบ</h2>
 <p class="note">โมเดลทั้ง 4 ตัวด้านล่าง ถูกวัด <b>2 รอบ คนละจุดประสงค์</b>:
 <span class="badge badge-val">Validation</span> วัดก่อน ใช้<b>เลือก</b>ว่าจะเอาตัวไหน
