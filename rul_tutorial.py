@@ -547,36 +547,19 @@ seed_rows = "".join(
     for n, v in test_scores.items()
 )
 
-report_html = f"""<!doctype html>
-<html lang="th"><head><meta charset="utf-8">
-<title>RUL Prediction - รายงานผล</title>
-<style>
-body {{ font-family: "Leelawadee UI", Tahoma, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }}
-table {{ border-collapse: collapse; margin: 12px 0; }}
-td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
-</style></head>
-<body>
-<h1>รายงานผล: ทำนาย Remaining Useful Life (RUL)</h1>
-<h2>สรุปความแม่นยำของโมเดล</h2>
-<table>
+# หมายเหตุ: "ฟีเจอร์ดิบ" ในตารางนี้แปลว่า "ยังไม่ผ่าน window feature engineering"
+# (เทียบกับแถวสุดท้ายที่มี window) ไม่ใช่ "ไม่ได้คัดเซ็นเซอร์นิ่งออก" — โมเดล 2 ตัวนี้
+# ใช้ feature_cols ที่คัดแล้ว (18 ตัว) เหมือนกัน ส่วนการทดลอง "คัดแล้ว vs ดิบทั้งหมด"
+# แบบไม่คัดเซ็นเซอร์นิ่งเลย อยู่ในหัวข้อ 14 ท้ายไฟล์ (ตารางแยกต่างหากด้านล่าง)
+main_table_html = f"""
 <tr><th>โมเดล</th><th>RMSE</th><th>MAE</th></tr>
-<tr><td>Linear Regression (ฟีเจอร์ดิบ)</td><td>{rmse_lr:.2f}</td><td>{mae_lr:.2f}</td></tr>
-<tr><td>Random Forest (ฟีเจอร์ดิบ)</td><td>{rmse_rf:.2f}</td><td>{mae_rf:.2f}</td></tr>
+<tr><td>Linear Regression (ฟีเจอร์คัดแล้ว, ไม่มี window)</td><td>{rmse_lr:.2f}</td><td>{mae_lr:.2f}</td></tr>
+<tr><td>Random Forest (ฟีเจอร์คัดแล้ว, ไม่มี window)</td><td>{rmse_rf:.2f}</td><td>{mae_rf:.2f}</td></tr>
 <tr><td><b>{best_name} + window</b></td><td><b>{rmse_final:.2f}</b></td><td><b>{mae_final:.2f}</b></td></tr>
-</table>
-<h2>ผลที่รายงานอย่างซื่อสัตย์ (เฉลี่ยจาก {len(SEEDS)} seed)</h2>
-<table>
-<tr><th>โมเดล</th><th>RMSE เฉลี่ย</th><th>± s.d.</th></tr>
-{seed_rows}
-</table>
-<h2>กราฟ</h2>
-{img_html}
-</body></html>"""
+"""
 
-with open("report.html", "w", encoding="utf-8") as f:
-    f.write(report_html)
-
-print("\nสร้างรายงานเสร็จแล้ว: เปิดไฟล์ report.html ด้วยเบราว์เซอร์เพื่อดูผลได้เลย")
+# ไฟล์ report.html จะถูกเขียนจริงท้ายสุดของสคริปต์ (หลังหัวข้อ 14) เพื่อให้รวมผล
+# การทดลอง "คัดแล้ว vs ดิบทั้งหมด" เข้าไปในรายงานได้ด้วย ตรงนี้แค่เตรียมชิ้นส่วนไว้ก่อน
 
 # %% [markdown]
 # ## 14) ทดลองเพิ่มเติม: ฟีเจอร์ดิบทั้งหมด (ไม่คัดออกเลย) คุ้มไหม
@@ -605,9 +588,11 @@ raw_experiments = {
     "Decision Tree (ดิบทั้งหมด 24 ตัว)": (DecisionTreeRegressor(max_depth=8, random_state=42), raw_cols),
 }
 
+raw_results = {}
 print(f"{'การทดลอง':<38} RMSE    MAE")
 for name, (mdl, cols) in raw_experiments.items():
     rmse, mae = evaluate(mdl, fit_df[cols], fit_df["RUL"], val_cut[cols], val_cut["RUL"])
+    raw_results[name] = (rmse, mae)
     print(f"  {name:<36} {rmse:6.2f}  {mae:6.2f}")
 
 # %% [markdown]
@@ -649,9 +634,11 @@ window_experiments = {
                                               fit_w_raw, val_w_raw_cut, raw_cols_w),
 }
 
+window_results = {}
 print(f"{'การทดลอง':<42} RMSE    MAE")
 for name, (mdl, fit_src, val_src, cols) in window_experiments.items():
     rmse, mae = evaluate(mdl, fit_src[cols], fit_src["RUL"], val_src[cols], val_src["RUL"])
+    window_results[name] = (rmse, mae)
     print(f"  {name:<40} {rmse:6.2f}  {mae:6.2f}")
 
 # %% [markdown]
@@ -664,3 +651,58 @@ for name, (mdl, fit_src, val_src, cols) in window_experiments.items():
 # "นิ่งสนิท" เหมือนต้นทาง — ถ้า Decision Tree เจอฟีเจอร์เหล่านี้แล้ว RMSE ขยับ
 # (มากกว่า ~0.5 ซึ่งเป็น margin ที่ใช้ตัดสิน "เสมอกัน" ในหัวข้อ 12) ก็แปลว่าการคัด
 # ฟีเจอร์ตั้งแต่ต้นมีผลจริงกับสายการทำงานแบบ window ไม่ใช่แค่ทฤษฎีลอย ๆ อีกต่อไป
+
+# %% [markdown]
+# ## 15) เขียนไฟล์ report.html (รวมทุกตาราง)
+#
+# เก็บชิ้นส่วน HTML ที่เตรียมไว้ตั้งแต่หัวข้อ 13 (`main_table_html`, `seed_rows`,
+# `img_html`) มาประกอบกับตารางผลการทดลองของหัวข้อ 14 แล้วเขียนไฟล์จริงตรงนี้ —
+# ต้องทำท้ายสุดของสคริปต์ เพราะเป็นจุดแรกที่ข้อมูลทุกส่วนพร้อมครบ
+
+# %%
+def _rows_html(results):
+    return "".join(
+        f"<tr><td>{name}</td><td>{rmse:.2f}</td><td>{mae:.2f}</td></tr>"
+        for name, (rmse, mae) in results.items()
+    )
+
+
+report_html = f"""<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<title>RUL Prediction - รายงานผล</title>
+<style>
+body {{ font-family: "Leelawadee UI", Tahoma, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }}
+table {{ border-collapse: collapse; margin: 12px 0; }}
+td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
+</style></head>
+<body>
+<h1>รายงานผล: ทำนาย Remaining Useful Life (RUL)</h1>
+<h2>สรุปความแม่นยำของโมเดล</h2>
+<table>
+{main_table_html}
+</table>
+<h2>ผลที่รายงานอย่างซื่อสัตย์ (เฉลี่ยจาก {len(SEEDS)} seed)</h2>
+<table>
+<tr><th>โมเดล</th><th>RMSE เฉลี่ย</th><th>± s.d.</th></tr>
+{seed_rows}
+</table>
+<h2>ทดลองเสริม: ฟีเจอร์ที่คัดแล้ว vs ดิบทั้งหมด (ไม่คัดเลย)</h2>
+<p>วัดผลด้วย validation set (20 เครื่องยนต์ที่กันไว้) ไม่ใช่ test set</p>
+<h3>ฟีเจอร์ดิบ (18 ตัวคัดแล้ว / 24 ตัวไม่คัด)</h3>
+<table>
+<tr><th>การทดลอง</th><th>RMSE</th><th>MAE</th></tr>
+{_rows_html(raw_results)}
+</table>
+<h3>ฟีเจอร์ window (72 ตัวคัดแล้ว / 96 ตัวไม่คัด)</h3>
+<table>
+<tr><th>การทดลอง</th><th>RMSE</th><th>MAE</th></tr>
+{_rows_html(window_results)}
+</table>
+<h2>กราฟ</h2>
+{img_html}
+</body></html>"""
+
+with open("report.html", "w", encoding="utf-8") as f:
+    f.write(report_html)
+
+print("\nสร้างรายงานเสร็จแล้ว (รวมผลหัวข้อ 14): เปิดไฟล์ report.html ด้วยเบราว์เซอร์เพื่อดูผลได้เลย")
