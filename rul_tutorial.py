@@ -574,7 +574,9 @@ main_table_html = f"""
 <tr><th>โมเดล</th><th>RMSE</th><th>MAE</th></tr>
 <tr><td>Linear Regression (ฟีเจอร์คัดแล้ว, ไม่มี window)</td><td>{rmse_lr:.2f}</td><td>{mae_lr:.2f}</td></tr>
 <tr><td>Random Forest (ฟีเจอร์คัดแล้ว, ไม่มี window)</td><td>{rmse_rf:.2f}</td><td>{mae_rf:.2f}</td></tr>
-<tr><td><b>{best_name} + window</b></td><td><b>{rmse_final:.2f}</b></td><td><b>{mae_final:.2f}</b></td></tr>
+<tr><td>{best_name} + window (รอบแรก รันครั้งเดียว)</td><td>{rmse_final:.2f}</td><td>{mae_final:.2f}</td></tr>
+<tr><td><b>{champion} + window (รอบสอง เฉลี่ย {len(SEEDS)} seed) ★ คำตอบสุดท้าย</b></td>
+<td><b>{champ.mean():.2f} ± {champ.std():.2f}</b></td><td>—</td></tr>
 """
 
 # ไฟล์ report.html จะถูกเขียนจริงท้ายสุดของสคริปต์ (หลังหัวข้อ 14) เพื่อให้รวมผล
@@ -791,9 +793,9 @@ img {{ border-radius: 8px; border: 1px solid var(--border); }}
 โมเดลทายแม่น</b> (หน่วยเป็นจำนวนรอบการทำงานที่ทายผิดไปโดยเฉลี่ย)</p>
 
 <div class="hero">
-<div class="label">โมเดลที่ดีที่สุด — วัดกับ Test set</div>
-<div class="model">{best_name} + window</div>
-<div class="metric">RMSE {rmse_final:.2f} &nbsp;•&nbsp; MAE {mae_final:.2f}</div>
+<div class="label">คำตอบสุดท้าย (เฉลี่ยจาก {len(SEEDS)} seed) — วัดกับ Test set</div>
+<div class="model">{champion} + window</div>
+<div class="metric">RMSE {champ.mean():.2f} ± {champ.std():.2f}</div>
 </div>
 
 <div class="legend">
@@ -816,8 +818,10 @@ img {{ border-radius: 8px; border: 1px solid var(--border); }}
 <div class="card">
 <h2>สรุปความแม่นยำของโมเดล <span class="badge badge-test">Test set</span></h2>
 <p class="note">เทรนด้วยข้อมูล train ทั้งหมด วัดผลกับ test set (100 เครื่องยนต์ที่ไม่เคย
-ใช้เทรนหรือเลือกโมเดลเลย) แถวสุดท้าย (ตัวหนา) คือโมเดลที่ validation set เลือกว่าดี
-ที่สุด บวกกับฟีเจอร์แบบ window (ดูคำอธิบาย window feature ด้านล่าง)</p>
+ใช้เทรนหรือเลือกโมเดลเลย) — มีการเลือกแชมป์ <b>2 รอบ</b>: รอบแรกเทียบแค่ 3 โมเดล
+รันครั้งเดียว ได้ {best_name}, ส่วนรอบสอง (ท้ายบทเรียน) เทียบ 4 ตัวเลือกรวม Ensemble
+รันซ้ำ {len(SEEDS)} seed เพื่อความน่าเชื่อถือ — <b>แถวสุดท้าย (ตัวหนา) คือคำตอบที่
+ถูกต้องกว่าและควรใช้อ้างอิง</b> ไม่ใช่แถวก่อนหน้า</p>
 <table>
 <tr><th>โมเดล</th><th>RMSE</th><th>MAE</th></tr>
 {main_table_html}
