@@ -702,19 +702,25 @@ lr_case_study_html = f"""
 ทั้งหมด รูปแบบคือเอาแต่ละฟีเจอร์คูณด้วย "น้ำหนัก" ของมัน แล้วบวกกันทั้งหมด — งาน
 ของโมเดลคือหาน้ำหนักที่ทำให้ผลรวมนี้ใกล้เคียง RUL จริงที่สุด</p>
 <p>ในสคริปต์นี้ Linear Regression ถูกทดลอง 5 รอบ ต่างกันที่ฟีเจอร์และชุดข้อมูล
-ที่ใช้วัดผล:</p>
+ที่ใช้วัดผล — สังเกตคอลัมน์ "วัดกับอะไร" ให้ดี <b>แถวแรกเท่านั้นที่เป็น test set
+ที่เหลือทั้งหมดเป็นแค่การทดลองบน validation set</b>:</p>
 <table>
 <tr><th>#</th><th>ฟีเจอร์</th><th>คัดเซ็นเซอร์นิ่งไหม</th><th>จำนวนฟีเจอร์</th>
 <th>วัดกับอะไร</th><th>RMSE</th></tr>
-<tr><td>1</td><td>ดิบ</td><td>คัดแล้ว</td><td>18</td><td>test set จริง (train เต็ม 100 เครื่อง)</td>
+<tr><td>1</td><td>ดิบ</td><td>คัดแล้ว</td><td>18</td>
+<td><span class="badge badge-test">Test set</span> train เต็ม 100 เครื่อง</td>
 <td><b>{rmse_lr:.2f}</b></td></tr>
-<tr><td>2</td><td>ดิบ</td><td>คัดแล้ว</td><td>18</td><td>validation (fit 80 เครื่อง)</td>
+<tr><td>2</td><td>ดิบ</td><td>คัดแล้ว</td><td>18</td>
+<td><span class="badge badge-val">Validation</span> fit 80 เครื่อง</td>
 <td>{lr_raw_sel[0]:.2f}</td></tr>
-<tr><td>3</td><td>ดิบ</td><td>ไม่คัด</td><td>24</td><td>validation</td>
+<tr><td>3</td><td>ดิบ</td><td>ไม่คัด</td><td>24</td>
+<td><span class="badge badge-val">Validation</span></td>
 <td>{lr_raw_all[0]:.2f}</td></tr>
-<tr><td>4</td><td>window</td><td>คัดแล้ว</td><td>72</td><td>validation</td>
+<tr><td>4</td><td>window</td><td>คัดแล้ว</td><td>72</td>
+<td><span class="badge badge-val">Validation</span></td>
 <td>{lr_win_sel[0]:.2f}</td></tr>
-<tr><td>5</td><td>window</td><td>ไม่คัด</td><td>96</td><td>validation</td>
+<tr><td>5</td><td>window</td><td>ไม่คัด</td><td>96</td>
+<td><span class="badge badge-val">Validation</span></td>
 <td>{lr_win_all[0]:.2f}</td></tr>
 </table>
 <p class="note">สิ่งที่เห็นจากตารางนี้: Linear Regression <b>ไม่สนใจว่าจะคัดฟีเจอร์
@@ -746,10 +752,36 @@ report_html = f"""<!doctype html>
 <html lang="th"><head><meta charset="utf-8">
 <title>RUL Prediction - รายงานผล</title>
 <style>
-body {{ font-family: "Leelawadee UI", Tahoma, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }}
-table {{ border-collapse: collapse; margin: 12px 0; }}
-td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
-.note {{ color: #555; font-size: 0.92em; }}
+:root {{
+  --bg: #f5f7fa; --card: #ffffff; --border: #e2e7ee; --text: #1f2430; --muted: #5b6472;
+  --accent: #2f6f4e; --test-bg: #e3f5ea; --test-fg: #1f7a4d; --val-bg: #e5eefc; --val-fg: #2159a8;
+}}
+* {{ box-sizing: border-box; }}
+body {{ font-family: "Leelawadee UI", Tahoma, sans-serif; max-width: 900px; margin: 40px auto;
+       padding: 0 20px; background: var(--bg); color: var(--text); line-height: 1.65; }}
+h1 {{ font-size: 1.7em; }}
+h2 {{ font-size: 1.25em; margin-top: 0; }}
+h3 {{ font-size: 1.02em; color: var(--accent); margin-bottom: 6px; }}
+.card {{ background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+        padding: 22px 26px; margin: 20px 0; box-shadow: 0 1px 3px rgba(20,30,40,0.05); }}
+table {{ border-collapse: collapse; margin: 10px 0; width: 100%; }}
+td, th {{ border: 1px solid var(--border); padding: 8px 12px; text-align: left; }}
+th {{ background: #eef1f5; }}
+tr:nth-child(even) td {{ background: #fafbfc; }}
+.note {{ color: var(--muted); font-size: 0.92em; }}
+.badge {{ display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: 0.76em;
+         font-weight: 700; letter-spacing: .02em; vertical-align: middle; white-space: nowrap; }}
+.badge-test {{ background: var(--test-bg); color: var(--test-fg); }}
+.badge-val {{ background: var(--val-bg); color: var(--val-fg); }}
+.hero {{ background: linear-gradient(135deg, #eaf7ef, #f4faf6); border: 2px solid var(--accent);
+        border-radius: 16px; padding: 22px; text-align: center; margin: 22px 0; }}
+.hero .label {{ font-size: 0.82em; color: var(--accent); font-weight: 700; text-transform: uppercase;
+               letter-spacing: .06em; }}
+.hero .model {{ font-size: 1.5em; font-weight: 800; color: #173d28; margin: 6px 0; }}
+.hero .metric {{ font-size: 1.15em; color: #333; }}
+.legend {{ background: #fffaf0; border: 1px solid #f0e0b8; border-radius: 10px; padding: 14px 18px;
+          margin: 20px 0; font-size: 0.92em; }}
+img {{ border-radius: 8px; border: 1px solid var(--border); }}
 </style></head>
 <body>
 <h1>รายงานผล: ทำนาย Remaining Useful Life (RUL)</h1>
@@ -758,13 +790,31 @@ td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
 งาน Predictive Maintenance ที่ใช้จริงในอุตสาหกรรม ยิ่ง <b>RMSE/MAE ต่ำ ยิ่งแปลว่า
 โมเดลทายแม่น</b> (หน่วยเป็นจำนวนรอบการทำงานที่ทายผิดไปโดยเฉลี่ย)</p>
 
+<div class="hero">
+<div class="label">โมเดลที่ดีที่สุด — วัดกับ Test set</div>
+<div class="model">{best_name} + window</div>
+<div class="metric">RMSE {rmse_final:.2f} &nbsp;•&nbsp; MAE {mae_final:.2f}</div>
+</div>
+
+<div class="legend">
+<span class="badge badge-test">Test set</span> = ชุดข้อมูลที่แตะแค่ <b>ครั้งเดียว</b>
+หลังตัดสินใจทุกอย่างเสร็จแล้ว → ตัวเลขจากชุดนี้คือ<b>ผลจริงที่รายงานได้อย่างซื่อสัตย์</b>
+<br><br>
+<span class="badge badge-val">Validation set</span> = ชุดข้อมูลที่กันไว้ต่างหาก ใช้
+<b>ทดลอง/เปรียบเทียบ</b>ระหว่างทาง เช็คซ้ำได้ไม่จำกัดครั้ง → ตัวเลขจากชุดนี้ใช้ดู
+แนวโน้มได้ แต่<b>ไม่ใช่ผลสรุปสุดท้าย</b>
+</div>
+
+<div class="card">
 <h2>โมเดลที่ใช้ในรายงานนี้คืออะไร</h2>
 <table>
 <tr><th>โมเดล</th><th>ทำงานยังไง</th></tr>
 {model_glossary_html}
 </table>
+</div>
 
-<h2>สรุปความแม่นยำของโมเดล</h2>
+<div class="card">
+<h2>สรุปความแม่นยำของโมเดล <span class="badge badge-test">Test set</span></h2>
 <p class="note">เทรนด้วยข้อมูล train ทั้งหมด วัดผลกับ test set (100 เครื่องยนต์ที่ไม่เคย
 ใช้เทรนหรือเลือกโมเดลเลย) แถวสุดท้าย (ตัวหนา) คือโมเดลที่ validation set เลือกว่าดี
 ที่สุด บวกกับฟีเจอร์แบบ window (ดูคำอธิบาย window feature ด้านล่าง)</p>
@@ -772,8 +822,10 @@ td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
 <tr><th>โมเดล</th><th>RMSE</th><th>MAE</th></tr>
 {main_table_html}
 </table>
+</div>
 
-<h2>ผลที่รายงานอย่างซื่อสัตย์ (เฉลี่ยจาก {len(SEEDS)} seed)</h2>
+<div class="card">
+<h2>ผลที่รายงานอย่างซื่อสัตย์ (เฉลี่ยจาก {len(SEEDS)} seed) <span class="badge badge-test">Test set</span></h2>
 <p class="note">โมเดลกลุ่มต้นไม้มีการสุ่มอยู่ข้างใน รันครั้งเดียวได้ตัวเลขเดียวอาจ
 เป็นเพราะบังเอิญได้ค่าสุ่มที่ดี ตารางนี้เลยรันซ้ำ {len(SEEDS)} รอบด้วยค่าสุ่มต่างกัน
 แล้วรายงานค่าเฉลี่ย ± ส่วนเบี่ยงเบน (ยิ่งส่วนเบี่ยงเบนน้อย ยิ่งเชื่อถือได้ว่าไม่ใช่
@@ -782,8 +834,10 @@ td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
 <tr><th>โมเดล</th><th>RMSE เฉลี่ย</th><th>± s.d.</th></tr>
 {seed_rows}
 </table>
+</div>
 
-<h2>ทดลองเสริม: ฟีเจอร์ที่คัดแล้ว vs ดิบทั้งหมด (ไม่คัดเลย)</h2>
+<div class="card">
+<h2>ทดลองเสริม: ฟีเจอร์ที่คัดแล้ว vs ดิบทั้งหมด <span class="badge badge-val">Validation set</span></h2>
 <p class="note">ตอนต้นบทเรียนตัดเซ็นเซอร์ 6 ตัวที่ค่า "นิ่ง" (แทบไม่เปลี่ยนเลย)
 ทิ้งไป ตารางนี้ทดสอบจริงว่าการตัดทิ้งนั้นช่วยความแม่นยำหรือแค่ช่วยให้เรียบง่ายขึ้น
 โดยลองใส่เซ็นเซอร์นิ่งกลับเข้าไปเทียบกัน — วัดผลด้วย validation set (20 เครื่องยนต์
@@ -801,9 +855,16 @@ td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
 <tr><th>การทดลอง</th><th>RMSE</th><th>MAE</th></tr>
 {_rows_html(window_results)}
 </table>
+</div>
+
+<div class="card">
 {lr_case_study_html}
+</div>
+
+<div class="card">
 <h2>กราฟ</h2>
 {img_html}
+</div>
 </body></html>"""
 
 with open("report.html", "w", encoding="utf-8") as f:
