@@ -576,6 +576,8 @@ td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
 with open("report.html", "w", encoding="utf-8") as f:
     f.write(report_html)
 
+print("\nสร้างรายงานเสร็จแล้ว: เปิดไฟล์ report.html ด้วยเบราว์เซอร์เพื่อดูผลได้เลย")
+
 # %% [markdown]
 # ## 14) ทดลองเพิ่มเติม: ฟีเจอร์ดิบทั้งหมด (ไม่คัดออกเลย) คุ้มไหม
 #
@@ -621,4 +623,44 @@ for name, (mdl, cols) in raw_experiments.items():
 # อ่อนไหวกับฟีเจอร์รบกวนมากกว่าโมเดลต้นไม้ (ต้นไม้เลือกเองได้ว่าจะใช้ฟีเจอร์ไหน
 # ตัดจุดไหน ฟีเจอร์ที่ไม่มีประโยชน์จะแทบไม่ถูกเลือกไปใช้แบ่งกิ่งเลย)
 
-print("\nสร้างรายงานเสร็จแล้ว: เปิดไฟล์ report.html ด้วยเบราว์เซอร์เพื่อดูผลได้เลย")
+# %% [markdown]
+# ### ทำซ้ำการทดลองเดิม แต่ใช้ฟีเจอร์แบบ window (72/96 ตัว) แทนฟีเจอร์ดิบ
+#
+# ข้างบนลองกับฟีเจอร์ดิบ (18/24 ตัว) ไปแล้ว มาดูว่าข้อสรุปเดิมยังจริงอยู่ไหม เมื่อ
+# เปลี่ยนไปใช้ฟีเจอร์แบบ window ที่มี mean/std/delta ของแต่ละเซ็นเซอร์ (หัวข้อ 10)
+# — คราวนี้ "ดิบทั้งหมด" หมายถึงคำนวณ mean20/std20/delta จากเซ็นเซอร์ทั้ง 24 ตัว
+# (รวมตัวนิ่ง 6 ตัวด้วย) ไม่ใช่แค่เอาคอลัมน์ดิบ 6 ตัวนั้นกลับมาเฉย ๆ
+
+# %%
+train_w_raw = add_window_features(train, raw_cols)
+raw_cols_w = [c for c in train_w_raw.columns if c not in ["unit_number", "time_cycles", "RUL"]]
+fit_w_raw = train_w_raw[train_w_raw["unit_number"].isin(fit_units)]
+val_w_raw_cut = cut_at_random(train_w_raw[train_w_raw["unit_number"].isin(val_units)])
+
+print(f"window ฟีเจอร์คัดแล้ว: {len(feature_cols_w)} ตัว | "
+      f"window ฟีเจอร์ดิบทั้งหมด: {len(raw_cols_w)} ตัว\n")
+
+window_experiments = {
+    "Linear Regression (window, คัดแล้ว 72)": (LinearRegression(), fit_w, val_w_cut, feature_cols_w),
+    "Linear Regression (window, ดิบทั้งหมด 96)": (LinearRegression(), fit_w_raw, val_w_raw_cut, raw_cols_w),
+    "Decision Tree (window, คัดแล้ว 72)": (DecisionTreeRegressor(max_depth=8, random_state=42),
+                                           fit_w, val_w_cut, feature_cols_w),
+    "Decision Tree (window, ดิบทั้งหมด 96)": (DecisionTreeRegressor(max_depth=8, random_state=42),
+                                              fit_w_raw, val_w_raw_cut, raw_cols_w),
+}
+
+print(f"{'การทดลอง':<42} RMSE    MAE")
+for name, (mdl, fit_src, val_src, cols) in window_experiments.items():
+    rmse, mae = evaluate(mdl, fit_src[cols], fit_src["RUL"], val_src[cols], val_src["RUL"])
+    print(f"  {name:<40} {rmse:6.2f}  {mae:6.2f}")
+
+# %% [markdown]
+# ### ทำไมผลรอบนี้อาจต่างจากรอบฟีเจอร์ดิบ
+#
+# กับฟีเจอร์ดิบ ทั้งสองโมเดลได้ผลแทบเท่ากันไม่ว่าจะคัดหรือไม่คัด เพราะเซ็นเซอร์นิ่ง
+# ไม่มีข้อมูลอะไรให้ใช้เลย — แต่กับฟีเจอร์ window เซ็นเซอร์นิ่ง 6 ตัวนั้นก็ถูกนำไป
+# คำนวณ mean20/std20/delta ด้วย ซึ่งถึงจะนิ่งในภาพรวมทั้งชุดข้อมูล แต่ในหน้าต่าง
+# 20 รอบเล็ก ๆ อาจมีค่าแกว่งเล็กน้อยที่ไม่ใช่ศูนย์เป๊ะ ทำให้เกิดฟีเจอร์ใหม่ที่ไม่ได้
+# "นิ่งสนิท" เหมือนต้นทาง — ถ้า Decision Tree เจอฟีเจอร์เหล่านี้แล้ว RMSE ขยับ
+# (มากกว่า ~0.5 ซึ่งเป็น margin ที่ใช้ตัดสิน "เสมอกัน" ในหัวข้อ 12) ก็แปลว่าการคัด
+# ฟีเจอร์ตั้งแต่ต้นมีผลจริงกับสายการทำงานแบบ window ไม่ใช่แค่ทฤษฎีลอย ๆ อีกต่อไป
