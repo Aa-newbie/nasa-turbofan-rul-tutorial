@@ -669,6 +669,45 @@ def _rows_html(results):
 
 # คำอธิบายสั้น ๆ ของแต่ละ "ประเภท" โมเดล ใช้ครั้งเดียวตรงนี้ อ้างอิงได้จากทุกตาราง
 # ด้านล่าง เพราะชื่อโมเดลในตารางต่าง ๆ ล้วนเป็นหนึ่งในประเภทเหล่านี้
+# กรณีศึกษา Linear Regression: รวมผลทุกรอบที่เคยลองในสคริปต์นี้มาไว้ที่เดียว
+# ดึงตัวเลขจริงจากตัวแปรที่คำนวณไว้แล้ว (ไม่ใช่พิมพ์ค่าคงที่) เพื่อให้ถูกต้องเสมอ
+# ไม่ว่าจะรันสคริปต์กี่ครั้งก็ตาม
+lr_raw_sel = raw_results["Linear Regression (คัดแล้ว 18 ตัว)"]
+lr_raw_all = raw_results["Linear Regression (ดิบทั้งหมด 24 ตัว)"]
+lr_win_sel = window_results["Linear Regression (window, คัดแล้ว 72)"]
+lr_win_all = window_results["Linear Regression (window, ดิบทั้งหมด 96)"]
+
+lr_case_study_html = f"""
+<h2>กรณีศึกษา: Linear Regression ทำอะไร</h2>
+<p class="note">Linear Regression พยายามหา "สมการเส้นตรง" ที่ทำนายคำตอบจากฟีเจอร์
+ทั้งหมด รูปแบบคือเอาแต่ละฟีเจอร์คูณด้วย "น้ำหนัก" ของมัน แล้วบวกกันทั้งหมด — งาน
+ของโมเดลคือหาน้ำหนักที่ทำให้ผลรวมนี้ใกล้เคียง RUL จริงที่สุด</p>
+<p>ในสคริปต์นี้ Linear Regression ถูกทดลอง 5 รอบ ต่างกันที่ฟีเจอร์และชุดข้อมูล
+ที่ใช้วัดผล:</p>
+<table>
+<tr><th>#</th><th>ฟีเจอร์</th><th>คัดเซ็นเซอร์นิ่งไหม</th><th>จำนวนฟีเจอร์</th>
+<th>วัดกับอะไร</th><th>RMSE</th></tr>
+<tr><td>1</td><td>ดิบ</td><td>คัดแล้ว</td><td>18</td><td>test set จริง (train เต็ม 100 เครื่อง)</td>
+<td><b>{rmse_lr:.2f}</b></td></tr>
+<tr><td>2</td><td>ดิบ</td><td>คัดแล้ว</td><td>18</td><td>validation (fit 80 เครื่อง)</td>
+<td>{lr_raw_sel[0]:.2f}</td></tr>
+<tr><td>3</td><td>ดิบ</td><td>ไม่คัด</td><td>24</td><td>validation</td>
+<td>{lr_raw_all[0]:.2f}</td></tr>
+<tr><td>4</td><td>window</td><td>คัดแล้ว</td><td>72</td><td>validation</td>
+<td>{lr_win_sel[0]:.2f}</td></tr>
+<tr><td>5</td><td>window</td><td>ไม่คัด</td><td>96</td><td>validation</td>
+<td>{lr_win_all[0]:.2f}</td></tr>
+</table>
+<p class="note">สิ่งที่เห็นจากตารางนี้: Linear Regression <b>ไม่สนใจว่าจะคัดฟีเจอร์
+นิ่งหรือไม่</b> (แถว 2-3 ค่าเท่ากัน, แถว 4-5 ค่าเท่ากัน) เพราะน้ำหนักของฟีเจอร์ที่ไม่
+เปลี่ยนแปลงเลยจะถูกคำนวณออกมาใกล้ศูนย์อัตโนมัติ แต่<b>สนใจว่าจะใช้ window features
+หรือไม่</b> (แถว 2→4 ดีขึ้นชัดเจน) — สรุปว่า feature engineering (window) สำคัญกว่า
+การคัดฟีเจอร์นิ่งทิ้งสำหรับโมเดลนี้ แม้จะปรับฟีเจอร์ดีแค่ไหน Linear Regression ก็
+ยังคงเป็นโมเดลที่แม่นน้อยที่สุดเมื่อเทียบกับโมเดลอื่นในรายงานนี้ เพราะข้อจำกัดคือ
+"เส้นตรง" จับความสัมพันธ์ที่ไม่เป็นเส้นตรง (เช่น การเสื่อมสภาพที่เร่งขึ้นเรื่อย ๆ
+ตอนใกล้พัง) ไม่ได้</p>
+"""
+
 model_glossary_html = """
 <tr><td><b>Linear Regression</b></td><td>ลากเส้นตรง (หรือระนาบ) ให้ fit กับข้อมูลให้ดีที่สุด
 ง่ายและตีความง่ายสุด แต่จับความสัมพันธ์ที่ไม่เป็นเส้นตรงไม่ได้</td></tr>
@@ -743,7 +782,7 @@ td, th {{ border: 1px solid #ccc; padding: 6px 12px; text-align: left; }}
 <tr><th>การทดลอง</th><th>RMSE</th><th>MAE</th></tr>
 {_rows_html(window_results)}
 </table>
-
+{lr_case_study_html}
 <h2>กราฟ</h2>
 {img_html}
 </body></html>"""
