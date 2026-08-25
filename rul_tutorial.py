@@ -12,6 +12,7 @@
 import pandas as pd
 import numpy as np
 import sys
+import time
 import matplotlib
 
 # สคริปต์นี้เซฟกราฟลงไฟล์อย่างเดียว ไม่ได้เปิดหน้าต่างโชว์กราฟ ตอนรันทั้งไฟล์
@@ -33,6 +34,14 @@ os.makedirs(OUT_DIR, exist_ok=True)
 # ใช้ฟอนต์ที่รองรับภาษาไทย ไม่งั้นตัวอักษรไทยในกราฟจะกลายเป็นกล่องว่าง
 plt.rcParams["font.family"] = "Leelawadee UI"
 plt.rcParams["axes.unicode_minus"] = False
+
+# ใช้เช็คความคืบหน้าตอนรันทั้งไฟล์ (โดยเฉพาะหัวข้อ 12 ที่หนักและเงียบนานสุด)
+# เรียก log("ข้อความ") ตรงไหนก็ได้ จะปริ้นเวลาที่ผ่านมาตั้งแต่เริ่มสคริปต์กำกับให้
+_t0 = time.time()
+
+
+def log(msg):
+    print(f"[{time.time() - _t0:6.0f}s] {msg}")
 
 # %% [markdown]
 # ## 1) โหลดข้อมูล
@@ -60,6 +69,7 @@ print("train shape:", train.shape)
 print("test shape:", test.shape)
 print("จำนวนเครื่องยนต์ใน train:", train["unit_number"].nunique())
 print(train.head())
+log("หัวข้อ 1) โหลดข้อมูลเสร็จ")
 
 # %% [markdown]
 # ## 2) สำรวจข้อมูล (EDA)
@@ -157,6 +167,7 @@ pred_lr = lr.predict(X_test)
 rmse_lr = mean_squared_error(y_test, pred_lr) ** 0.5
 mae_lr = mean_absolute_error(y_test, pred_lr)
 print(f"[Linear Regression]  RMSE = {rmse_lr:.2f}  MAE = {mae_lr:.2f}")
+log("หัวข้อ 5) Linear Regression baseline เสร็จ")
 
 # %% [markdown]
 # ## 6) โมเดลที่ 2: Random Forest (โมเดลที่ซับซ้อนขึ้น จับ pattern แบบไม่เชิงเส้นได้)
@@ -168,6 +179,7 @@ pred_rf = rf.predict(X_test)
 rmse_rf = mean_squared_error(y_test, pred_rf) ** 0.5
 mae_rf = mean_absolute_error(y_test, pred_rf)
 print(f"[Random Forest]      RMSE = {rmse_rf:.2f}  MAE = {mae_rf:.2f}")
+log("หัวข้อ 6) Random Forest baseline เสร็จ")
 
 # %% [markdown]
 # ## 7) เปรียบเทียบผลลัพธ์ + ดูว่าเซ็นเซอร์ไหนสำคัญที่สุด
@@ -257,6 +269,7 @@ print(f"เทรนด้วย {len(fit_units)} เครื่อง / วั
 print(f"ขนาด validation set: {len(val_cut)} ตัวอย่าง "
       f"(สุ่มจุดตัดเครื่องละไม่เกิน {VAL_CUTS_PER_UNIT} จุด)")
 print("ช่วง RUL ของ validation set:", val_cut["RUL"].min(), "-", val_cut["RUL"].max())
+log("หัวข้อ 8) แบ่ง validation set เสร็จ")
 
 # %% [markdown]
 # ## 9) โมเดลที่ 3: HistGradientBoosting
@@ -374,6 +387,7 @@ print("\n=== ผลสุดท้ายบน test set ===")
 print(f"  Linear Regression (ฟีเจอร์ดิบ)   RMSE = {rmse_lr:6.2f}  MAE = {mae_lr:6.2f}")
 print(f"  Random Forest (ฟีเจอร์ดิบ)       RMSE = {rmse_rf:6.2f}  MAE = {mae_rf:6.2f}")
 print(f"  {best_name} + window  RMSE = {rmse_final:6.2f}  MAE = {mae_final:6.2f}")
+log("หัวข้อ 11) เลือกแชมป์รอบแรก + วัด test เสร็จ (กำลังเข้า section 12 ซึ่งช้าสุด)")
 
 # evaluate() เพิ่ง .fit() ให้ final_model ไปแล้วข้างบน (โมเดลถูกแก้ไข้ใน object เดิม
 # เพราะไพทอนส่ง object ผ่านตัวแปรแบบ reference) เลยเรียก .predict() ซ้ำได้เลย
@@ -430,11 +444,15 @@ def models_for_seed(seed):
     }
 
 
-def run_seeds(X_fit, y_fit, X_eval, y_eval):
-    """เทรนทุกโมเดลด้วยหลาย seed แล้วคืน RMSE ของแต่ละตัว รวมทั้งแบบผสม"""
+def run_seeds(X_fit, y_fit, X_eval, y_eval, label=""):
+    """เทรนทุกโมเดลด้วยหลาย seed แล้วคืน RMSE ของแต่ละตัว รวมทั้งแบบผสม
+
+    เป็นจุดที่ใช้เวลานานที่สุดในสคริปต์ (เทรน 3 โมเดล x 5 seed = 15 ครั้งต่อการเรียก
+    1 ครั้ง) เลยปริ้นความคืบหน้าทีละ seed กันเข้าใจผิดว่าโปรแกรมค้าง
+    """
     scores = {name: [] for name in models_for_seed(0)}
     scores["Ensemble (เฉลี่ย 3 ตัว)"] = []
-    for seed in SEEDS:
+    for i, seed in enumerate(SEEDS, 1):
         preds = {}
         for name, model in models_for_seed(seed).items():
             model.fit(X_fit, y_fit)
@@ -442,6 +460,7 @@ def run_seeds(X_fit, y_fit, X_eval, y_eval):
             scores[name].append(mean_squared_error(y_eval, preds[name]) ** 0.5)
         ens = np.mean(list(preds.values()), axis=0)
         scores["Ensemble (เฉลี่ย 3 ตัว)"].append(mean_squared_error(y_eval, ens) ** 0.5)
+        log(f"{label} seed {i}/{len(SEEDS)} เสร็จแล้ว")
     return scores
 
 
@@ -457,8 +476,9 @@ def summarise(scores, title):
 
 
 # --- ตัดสินใจบน validation ตามเดิม ---
+log("หัวข้อ 12) เริ่มรอบ validation (5 seed x 3 โมเดล = 15 ครั้ง)")
 val_scores = run_seeds(fit_w[feature_cols_w], fit_w["RUL"],
-                       val_w_cut[feature_cols_w], val_w_cut["RUL"])
+                       val_w_cut[feature_cols_w], val_w_cut["RUL"], label="[validation]")
 val_mean = summarise(val_scores, f"--- validation set ({len(SEEDS)} seeds) ---")
 
 # กฎการเลือก ประกาศไว้ก่อนดูผล test:
@@ -489,14 +509,16 @@ print(f"\n  >>> validation เลือก: {champion}")
 # สิ่งที่ตัวเลขชุดนี้บอกได้อย่างซื่อสัตย์คือ **ความไม่แน่นอนของผล** ซึ่งเป็นสิ่งที่
 # ต้องรายงานคู่กับค่าเฉลี่ยเสมอ
 
+log("หัวข้อ 12) เริ่มรอบ test (5 seed x 3 โมเดล = 15 ครั้ง, เทรนด้วย train เต็ม 100 เครื่อง ช้ากว่ารอบ validation)")
 test_scores = run_seeds(train_w[feature_cols_w], train_w["RUL"],
-                        test_w_last[feature_cols_w], y_test)
+                        test_w_last[feature_cols_w], y_test, label="[test]")
 test_mean = summarise(test_scores, f"--- test set ({len(SEEDS)} seeds) ---")
 
 champ = np.array(test_scores[champion])
 print(f"\n  ผลที่ควรรายงานในเล่ม: {champion} -> RMSE {champ.mean():.2f} ± {champ.std():.2f}")
 print(f"  (เทียบกับการรายงานเลขเดี่ยวจากการรันครั้งเดียว ซึ่งอาจได้ตั้งแต่ "
       f"{champ.min():.2f} ถึง {champ.max():.2f} แล้วแต่ดวง)")
+log("หัวข้อ 12) เสร็จสมบูรณ์ (ส่วนที่ช้าสุดผ่านไปแล้ว ที่เหลือเร็ว)")
 
 # %%
 plt.figure(figsize=(8, 4.5))
@@ -658,6 +680,7 @@ for name, (mdl, fit_src, val_src, cols) in window_experiments.items():
     rmse, mae = evaluate(mdl, fit_src[cols], fit_src["RUL"], val_src[cols], val_src["RUL"])
     window_results[name] = (rmse, mae)
     print(f"  {name:<40} {rmse:6.2f}  {mae:6.2f}")
+log("หัวข้อ 14) ทดลองเสริมเสร็จ")
 
 # %% [markdown]
 # ### ทำไมผลรอบนี้อาจต่างจากรอบฟีเจอร์ดิบ
@@ -797,3 +820,4 @@ with open("report.html", "w", encoding="utf-8") as f:
     f.write(report_html)
 
 print("\nสร้างรายงานเสร็จแล้ว: เปิดไฟล์ report.html ด้วยเบราว์เซอร์เพื่อดูผลได้เลย")
+log("รันทั้งไฟล์เสร็จสมบูรณ์")
