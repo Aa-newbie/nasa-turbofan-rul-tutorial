@@ -17,6 +17,7 @@ Dataset ต้นทาง: [NASA Turbofan Engine Degradation Simulation (Kaggle
 - [`rul_lstm.py`](rul_lstm.py) — บทเรียนต่อยอด ทำนาย RUL ด้วย LSTM (PyTorch)
 - [`requirements.txt`](requirements.txt) — รายการไลบรารีพร้อมเวอร์ชันที่ตรึงไว้
 - [`requirements-lstm.txt`](requirements-lstm.txt) — ไลบรารีเพิ่มเติมสำหรับบทเรียน LSTM
+- [`GLOSSARY.md`](GLOSSARY.md) — คำศัพท์ ML ทั้งหมดที่ใช้ในบทเรียนนี้ อธิบายแบบมือใหม่
 
 ## การติดตั้ง (สำหรับมือใหม่)
 
