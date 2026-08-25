@@ -375,6 +375,22 @@ print(f"  Linear Regression (ฟีเจอร์ดิบ)   RMSE = {rmse_lr:6
 print(f"  Random Forest (ฟีเจอร์ดิบ)       RMSE = {rmse_rf:6.2f}  MAE = {mae_rf:6.2f}")
 print(f"  {best_name} + window  RMSE = {rmse_final:6.2f}  MAE = {mae_final:6.2f}")
 
+# evaluate() เพิ่ง .fit() ให้ final_model ไปแล้วข้างบน (โมเดลถูกแก้ไข้ใน object เดิม
+# เพราะไพทอนส่ง object ผ่านตัวแปรแบบ reference) เลยเรียก .predict() ซ้ำได้เลย
+# โดยไม่ต้องเทรนใหม่ เอามาวาดกราฟเทียบค่าทายกับค่าจริงของโมเดลแชมป์ตัวจริง
+pred_final = np.clip(final_model.predict(test_w_last[feature_cols_w]), 0, RUL_CLIP)
+
+plt.figure(figsize=(6, 6))
+plt.scatter(y_test, pred_final, alpha=0.6, color="#2f6f4e")
+plt.plot([0, RUL_CLIP], [0, RUL_CLIP], "k--", label="ทายถูกเป๊ะ (ideal)")
+plt.xlabel("RUL จริง")
+plt.ylabel("RUL ที่โมเดลทาย")
+plt.title(f"{best_name} + window บน test set (RMSE {rmse_final:.2f})")
+plt.legend()
+plt.tight_layout()
+plt.savefig(f"{OUT_DIR}/08_final_pred_vs_actual.png", dpi=120)
+plt.close()
+
 plt.figure(figsize=(7, 4))
 bar_names = ["Linear\nRegression", "Random\nForest", f"{best_name}\n+ window"]
 bar_values = [rmse_lr, rmse_rf, rmse_final]
@@ -531,9 +547,12 @@ def _img_to_base64(path):
 report_images = [
     ("อายุการใช้งานของแต่ละเครื่องยนต์", "01_engine_life_distribution.png"),
     ("เทรนด์เซ็นเซอร์เทียบกับรอบการทำงาน", "02_sensor_trends.png"),
-    ("ค่าที่โมเดลทาย เทียบกับค่าจริง", "03_pred_vs_actual.png"),
+    ("ค่าที่โมเดลทาย เทียบกับค่าจริง (baseline: Linear Regression / Random Forest)",
+     "03_pred_vs_actual.png"),
     ("ความสำคัญของฟีเจอร์ (Random Forest)", "04_feature_importance.png"),
     ("เปรียบเทียบความแม่นยำของทุกโมเดล", "05_model_comparison.png"),
+    (f"ค่าที่โมเดลแชมป์ทาย เทียบกับค่าจริง ({best_name} + window)",
+     "08_final_pred_vs_actual.png"),
     ("ความไม่แน่นอนของผล เมื่อรันหลาย seed", "07_seed_variance.png"),
 ]
 
