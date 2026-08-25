@@ -38,6 +38,7 @@ OUT_DIR = "plots"
 SEQ_LEN = 30        # ดูข้อมูลย้อนหลังกี่รอบต่อหนึ่งตัวอย่าง
 RUL_CLIP = 125      # เพดาน RUL เท่ากับบทเรียนหลัก เพื่อให้เทียบผลกันได้
 SEED = 42
+BATCH = 256         # ขนาด mini-batch ต่อรอบการเทรน
 
 torch.manual_seed(SEED)
 np.random.seed(SEED)
@@ -180,70 +181,116 @@ print(model)
 print(f"\nพารามิเตอร์ที่ต้องเรียน: {n_params:,} ตัว")
 
 # %% [markdown]
-# ## 5) เทรน
+# ## 5) Grid Search หาค่า hyperparameter ที่ดีที่สุด (วัดบน validation เท่านั้น)
 #
-# ต่างจาก sklearn ที่เรียก `.fit()` บรรทัดเดียวจบ — PyTorch ให้เราเขียนวงจรการเรียน
-# เองทุกขั้น ซึ่งดูยุ่งกว่าแต่ควบคุมได้ละเอียดกว่ามาก แต่ละรอบ (epoch) ทำ 5 ขั้น:
+# **Grid search** คือการตั้งตารางค่าที่จะลองของแต่ละ hyperparameter แล้ว**ลองทุกคู่
+# ผสมที่เป็นไปได้** วัดผลแต่ละชุดด้วย validation set แล้วเลือกชุดที่ดีที่สุด — ใช้
+# หลักการเดียวกับตลอดทั้งบทเรียน: **ห้ามใช้ test set เลือกอะไรทั้งนั้น**
 #
-# 1. `optimizer.zero_grad()` — ล้างค่าอนุพันธ์ของรอบก่อน
-# 2. `model(xb)` — ทำนาย (forward pass)
-# 3. `loss_fn(...)` — วัดว่าผิดไปเท่าไหร่
-# 4. `loss.backward()` — คำนวณย้อนกลับว่าน้ำหนักแต่ละตัวมีส่วนผิดแค่ไหน
-# 5. `optimizer.step()` — ขยับน้ำหนักไปในทางที่ผิดน้อยลง
+# ต่างจากบทเรียนหลัก (sklearn) ตรงที่ Random Forest เทรนเสร็จในหลักวินาที จะลองกี่
+# ชุดก็ไม่เจ็บตัว แต่ **LSTM แต่ละรอบเทรนกินเวลาเป็นนาที** ยิ่งจำนวนชุดที่ลองเยอะ
+# เวลารวมยิ่งทวีคูณ (grid นี้จงใจตรึง `layers=2` ไว้คงที่ ไม่เอาเข้า grid ด้วย
+# เพื่อกันจำนวนชุดบวมเกินไป) และลด epoch ระหว่างค้นหาลงเหลือ `SEARCH_EPOCHS` แค่
+# พอเห็นแนวโน้มว่าชุดไหนดีกว่ากัน แล้วค่อยเทรนตัวที่ชนะด้วย epoch เต็มอีกทีตอนท้าย
+
+# %%
+def train_model(hidden, layers, lr, epochs, X_fit, y_fit, X_val, y_val, seed=SEED, verbose=False):
+    """เทรน LSTM หนึ่งชุด hyperparameter แล้วคืนโมเดล (น้ำหนักจาก epoch ที่ val ดีที่สุด)
+
+    วงจรการเรียนแต่ละ epoch ทำ 5 ขั้นตามที่ PyTorch ต้องเขียนเอง (ต่างจาก sklearn
+    ที่เรียก .fit() บรรทัดเดียวจบ): zero_grad -> forward -> loss -> backward -> step
+    """
+    torch.manual_seed(seed)
+    model = LSTMRegressor(len(feature_cols), hidden=hidden, layers=layers)
+    loader = DataLoader(
+        TensorDataset(torch.from_numpy(X_fit), torch.from_numpy(y_fit / RUL_CLIP)),
+        batch_size=BATCH, shuffle=True,
+    )
+    Xv = torch.from_numpy(X_val)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    loss_fn = nn.MSELoss()
+
+    history = {"train": [], "val": []}
+    best_rmse, best_state, best_epoch = float("inf"), None, 0
+
+    for epoch in range(1, epochs + 1):
+        model.train()
+        total = 0.0
+        for xb, yb in loader:
+            optimizer.zero_grad()
+            loss = loss_fn(model(xb), yb)
+            loss.backward()
+            optimizer.step()
+            total += loss.item() * len(xb)
+        train_loss = total / len(loader.dataset)
+
+        model.eval()
+        with torch.no_grad():
+            pred_val = model(Xv).numpy() * RUL_CLIP
+        val_rmse = mean_squared_error(y_val, pred_val) ** 0.5
+
+        history["train"].append(train_loss ** 0.5 * RUL_CLIP)
+        history["val"].append(val_rmse)
+
+        # เก็บสถานะของ epoch ที่ validation ดีที่สุดไว้ (early stopping แบบง่าย)
+        if val_rmse < best_rmse:
+            best_rmse, best_epoch = val_rmse, epoch
+            best_state = {k: v.clone() for k, v in model.state_dict().items()}
+
+        if verbose and (epoch % 5 == 0 or epoch == 1):
+            print(f"epoch {epoch:>3}/{epochs}  train RMSE {history['train'][-1]:6.2f}  "
+                  f"val RMSE {val_rmse:6.2f}")
+
+    model.load_state_dict(best_state)
+    return model, best_rmse, best_epoch, history
+
+
+# %%
+import itertools
+
+GRID = {"hidden": [32, 64], "lr": [1e-3, 3e-4]}   # layers ตรึงไว้ที่ 2 กันชุดบวม
+SEARCH_EPOCHS = 10
+
+combos = list(itertools.product(GRID["hidden"], GRID["lr"]))
+print(f"ทดลองทั้งหมด {len(combos)} ชุด (hidden x lr), {SEARCH_EPOCHS} epoch ต่อชุด "
+      f"— วัดผลด้วย validation set\n")
+
+grid_rows = []
+for hidden, lr in combos:
+    _, val_rmse, _, _ = train_model(hidden, 2, lr, SEARCH_EPOCHS, X_fit, y_fit, X_val, y_val)
+    grid_rows.append({"hidden": hidden, "layers": 2, "lr": lr, "val_rmse": val_rmse})
+    print(f"  hidden={hidden:<3} layers=2 lr={lr:<7g}  val RMSE = {val_rmse:6.2f}")
+
+grid_df = pd.DataFrame(grid_rows).sort_values("val_rmse").reset_index(drop=True)
+print("\nอันดับผลลัพธ์ (เรียงจากดีสุด):")
+print(grid_df.to_string(index=False))
+
+best = grid_df.iloc[0]
+HIDDEN, LAYERS, LR = int(best["hidden"]), int(best["layers"]), float(best["lr"])
+print(f"\n>>> validation เลือก config: hidden={HIDDEN} layers={LAYERS} lr={LR:g}")
+
+# %% [markdown]
+# ## 6) เทรนโมเดลสุดท้ายด้วย config ที่ชนะ (epoch เต็ม)
+#
+# ตอนค้นหาเราลด epoch ลงเพื่อความเร็ว อันดับที่ได้จึงเป็นแค่ "แนวโน้ม" คร่าว ๆ
+# ขั้นนี้เทรน config ที่ชนะซ้ำอีกรอบด้วย epoch เต็ม (`EPOCHS = 40`) ให้โมเดลเรียนรู้
+# ได้เต็มที่ก่อนเอาไปวัดผลจริงกับ test set
 #
 # เราหาร label ด้วย 125 ให้อยู่ในช่วง 0-1 เพราะ neural network เรียนได้นิ่งกว่า
-# เมื่อค่าเป้าหมายไม่ใหญ่เกินไป แล้วค่อยคูณกลับตอนวัดผล
+# เมื่อค่าเป้าหมายไม่ใหญ่เกินไป แล้วค่อยคูณกลับตอนวัดผล (ทำอยู่แล้วภายใน `train_model`)
 
 # %%
 EPOCHS = 40
-BATCH = 256
 
-loader = DataLoader(
-    TensorDataset(torch.from_numpy(X_fit), torch.from_numpy(y_fit / RUL_CLIP)),
-    batch_size=BATCH, shuffle=True,
+model, best_rmse, best_epoch, history = train_model(
+    HIDDEN, LAYERS, LR, EPOCHS, X_fit, y_fit, X_val, y_val, verbose=True
 )
-Xv = torch.from_numpy(X_val)
 Xt = torch.from_numpy(X_test)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-loss_fn = nn.MSELoss()
-
-history = {"train": [], "val": []}
-best_rmse, best_state, best_epoch = float("inf"), None, 0
-
-for epoch in range(1, EPOCHS + 1):
-    model.train()
-    total = 0.0
-    for xb, yb in loader:
-        optimizer.zero_grad()
-        loss = loss_fn(model(xb), yb)
-        loss.backward()
-        optimizer.step()
-        total += loss.item() * len(xb)
-    train_loss = total / len(loader.dataset)
-
-    model.eval()
-    with torch.no_grad():
-        pred_val = model(Xv).numpy() * RUL_CLIP
-    val_rmse = mean_squared_error(y_val, pred_val) ** 0.5
-
-    history["train"].append(train_loss ** 0.5 * RUL_CLIP)
-    history["val"].append(val_rmse)
-
-    # เก็บสถานะของ epoch ที่ validation ดีที่สุดไว้ (early stopping แบบง่าย)
-    if val_rmse < best_rmse:
-        best_rmse, best_epoch = val_rmse, epoch
-        best_state = {k: v.clone() for k, v in model.state_dict().items()}
-
-    if epoch % 5 == 0 or epoch == 1:
-        print(f"epoch {epoch:>3}/{EPOCHS}  train RMSE {history['train'][-1]:6.2f}  "
-              f"val RMSE {val_rmse:6.2f}")
-
 print(f"\nepoch ที่ validation ดีที่สุด: {best_epoch} (RMSE {best_rmse:.2f})")
-model.load_state_dict(best_state)
 
 # %% [markdown]
-# ## 6) วัดผลบน test set
+# ## 7) วัดผลบน test set
 #
 # ใช้น้ำหนักจาก epoch ที่ validation ดีที่สุด ไม่ใช่ epoch สุดท้าย เพราะเส้น
 # validation ไม่ได้ดีขึ้นเรื่อย ๆ แต่จะลงมาถึงจุดหนึ่งแล้ว **แกว่งขึ้นลง** เช่นรอบนี้
