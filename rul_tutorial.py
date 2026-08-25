@@ -561,23 +561,20 @@ for title, filename in report_images:
     b64 = _img_to_base64(f"{OUT_DIR}/{filename}")
     img_html += f'<h3>{title}</h3><img src="data:image/png;base64,{b64}" style="max-width:100%"><br>'
 
-seed_rows = "".join(
-    f'<tr><td>{n}</td><td>{np.mean(v):.2f}</td><td>{np.std(v):.2f}</td></tr>'
-    for n, v in test_scores.items()
-)
+# ตารางหลักของรายงาน: เอาโมเดลชุดเดียวกัน 4 ตัว (จากหัวข้อ 12) มาวางเทียบกัน
+# 2 คอลัมน์ — วัดกับ validation (ใช้ตัดสินใจ) กับวัดกับ test (ยืนยันครั้งเดียว)
+# เพื่อให้เห็นตรง ๆ ว่า "โมเดลชุดเดียวกัน ถูกวัดสองรอบ คนละจุดประสงค์" ไม่ใช่
+# โมเดลคนละชุดกัน
+def _combined_row(name):
+    v_mean, v_std = np.mean(val_scores[name]), np.std(val_scores[name])
+    t_mean, t_std = np.mean(test_scores[name]), np.std(test_scores[name])
+    star, style = ("★ ", ' style="background:#eaf7ef;font-weight:700;"') if name == champion else ("", "")
+    return (f"<tr{style}><td>{star}{name}</td>"
+            f"<td>{v_mean:.2f} ± {v_std:.2f}</td>"
+            f"<td>{t_mean:.2f} ± {t_std:.2f}</td></tr>")
 
-# หมายเหตุ: "ฟีเจอร์ดิบ" ในตารางนี้แปลว่า "ยังไม่ผ่าน window feature engineering"
-# (เทียบกับแถวสุดท้ายที่มี window) ไม่ใช่ "ไม่ได้คัดเซ็นเซอร์นิ่งออก" — โมเดล 2 ตัวนี้
-# ใช้ feature_cols ที่คัดแล้ว (18 ตัว) เหมือนกัน ส่วนการทดลอง "คัดแล้ว vs ดิบทั้งหมด"
-# แบบไม่คัดเซ็นเซอร์นิ่งเลย อยู่ในหัวข้อ 14 ท้ายไฟล์ (ตารางแยกต่างหากด้านล่าง)
-main_table_html = f"""
-<tr><th>โมเดล</th><th>RMSE</th><th>MAE</th></tr>
-<tr><td>Linear Regression (ฟีเจอร์คัดแล้ว, ไม่มี window)</td><td>{rmse_lr:.2f}</td><td>{mae_lr:.2f}</td></tr>
-<tr><td>Random Forest (ฟีเจอร์คัดแล้ว, ไม่มี window)</td><td>{rmse_rf:.2f}</td><td>{mae_rf:.2f}</td></tr>
-<tr><td>{best_name} + window (รอบแรก รันครั้งเดียว)</td><td>{rmse_final:.2f}</td><td>{mae_final:.2f}</td></tr>
-<tr><td><b>{champion} + window (รอบสอง เฉลี่ย {len(SEEDS)} seed) ★ คำตอบสุดท้าย</b></td>
-<td><b>{champ.mean():.2f} ± {champ.std():.2f}</b></td><td>—</td></tr>
-"""
+
+main_table_html = "".join(_combined_row(name) for name in test_scores)
 
 # ไฟล์ report.html จะถูกเขียนจริงท้ายสุดของสคริปต์ (หลังหัวข้อ 14) เพื่อให้รวมผล
 # การทดลอง "คัดแล้ว vs ดิบทั้งหมด" เข้าไปในรายงานได้ด้วย ตรงนี้แค่เตรียมชิ้นส่วนไว้ก่อน
@@ -681,60 +678,7 @@ for name, (mdl, fit_src, val_src, cols) in window_experiments.items():
 # ต้องทำท้ายสุดของสคริปต์ เพราะเป็นจุดแรกที่ข้อมูลทุกส่วนพร้อมครบ
 
 # %%
-def _rows_html(results):
-    return "".join(
-        f"<tr><td>{name}</td><td>{rmse:.2f}</td><td>{mae:.2f}</td></tr>"
-        for name, (rmse, mae) in results.items()
-    )
-
-
-# คำอธิบายสั้น ๆ ของแต่ละ "ประเภท" โมเดล ใช้ครั้งเดียวตรงนี้ อ้างอิงได้จากทุกตาราง
-# ด้านล่าง เพราะชื่อโมเดลในตารางต่าง ๆ ล้วนเป็นหนึ่งในประเภทเหล่านี้
-# กรณีศึกษา Linear Regression: รวมผลทุกรอบที่เคยลองในสคริปต์นี้มาไว้ที่เดียว
-# ดึงตัวเลขจริงจากตัวแปรที่คำนวณไว้แล้ว (ไม่ใช่พิมพ์ค่าคงที่) เพื่อให้ถูกต้องเสมอ
-# ไม่ว่าจะรันสคริปต์กี่ครั้งก็ตาม
-lr_raw_sel = raw_results["Linear Regression (คัดแล้ว 18 ตัว)"]
-lr_raw_all = raw_results["Linear Regression (ดิบทั้งหมด 24 ตัว)"]
-lr_win_sel = window_results["Linear Regression (window, คัดแล้ว 72)"]
-lr_win_all = window_results["Linear Regression (window, ดิบทั้งหมด 96)"]
-
-lr_case_study_html = f"""
-<h2>กรณีศึกษา: Linear Regression ทำอะไร</h2>
-<p class="note">Linear Regression พยายามหา "สมการเส้นตรง" ที่ทำนายคำตอบจากฟีเจอร์
-ทั้งหมด รูปแบบคือเอาแต่ละฟีเจอร์คูณด้วย "น้ำหนัก" ของมัน แล้วบวกกันทั้งหมด — งาน
-ของโมเดลคือหาน้ำหนักที่ทำให้ผลรวมนี้ใกล้เคียง RUL จริงที่สุด</p>
-<p>ในสคริปต์นี้ Linear Regression ถูกทดลอง 5 รอบ ต่างกันที่ฟีเจอร์และชุดข้อมูล
-ที่ใช้วัดผล — สังเกตคอลัมน์ "วัดกับอะไร" ให้ดี <b>แถวแรกเท่านั้นที่เป็น test set
-ที่เหลือทั้งหมดเป็นแค่การทดลองบน validation set</b>:</p>
-<table>
-<tr><th>#</th><th>ฟีเจอร์</th><th>คัดเซ็นเซอร์นิ่งไหม</th><th>จำนวนฟีเจอร์</th>
-<th>วัดกับอะไร</th><th>RMSE</th></tr>
-<tr><td>1</td><td>ดิบ</td><td>คัดแล้ว</td><td>18</td>
-<td><span class="badge badge-test">Test set</span> train เต็ม 100 เครื่อง</td>
-<td><b>{rmse_lr:.2f}</b></td></tr>
-<tr><td>2</td><td>ดิบ</td><td>คัดแล้ว</td><td>18</td>
-<td><span class="badge badge-val">Validation</span> fit 80 เครื่อง</td>
-<td>{lr_raw_sel[0]:.2f}</td></tr>
-<tr><td>3</td><td>ดิบ</td><td>ไม่คัด</td><td>24</td>
-<td><span class="badge badge-val">Validation</span></td>
-<td>{lr_raw_all[0]:.2f}</td></tr>
-<tr><td>4</td><td>window</td><td>คัดแล้ว</td><td>72</td>
-<td><span class="badge badge-val">Validation</span></td>
-<td>{lr_win_sel[0]:.2f}</td></tr>
-<tr><td>5</td><td>window</td><td>ไม่คัด</td><td>96</td>
-<td><span class="badge badge-val">Validation</span></td>
-<td>{lr_win_all[0]:.2f}</td></tr>
-</table>
-<p class="note">สิ่งที่เห็นจากตารางนี้: Linear Regression <b>ไม่สนใจว่าจะคัดฟีเจอร์
-นิ่งหรือไม่</b> (แถว 2-3 ค่าเท่ากัน, แถว 4-5 ค่าเท่ากัน) เพราะน้ำหนักของฟีเจอร์ที่ไม่
-เปลี่ยนแปลงเลยจะถูกคำนวณออกมาใกล้ศูนย์อัตโนมัติ แต่<b>สนใจว่าจะใช้ window features
-หรือไม่</b> (แถว 2→4 ดีขึ้นชัดเจน) — สรุปว่า feature engineering (window) สำคัญกว่า
-การคัดฟีเจอร์นิ่งทิ้งสำหรับโมเดลนี้ แม้จะปรับฟีเจอร์ดีแค่ไหน Linear Regression ก็
-ยังคงเป็นโมเดลที่แม่นน้อยที่สุดเมื่อเทียบกับโมเดลอื่นในรายงานนี้ เพราะข้อจำกัดคือ
-"เส้นตรง" จับความสัมพันธ์ที่ไม่เป็นเส้นตรง (เช่น การเสื่อมสภาพที่เร่งขึ้นเรื่อย ๆ
-ตอนใกล้พัง) ไม่ได้</p>
-"""
-
+# คำอธิบายสั้น ๆ ของแต่ละ "ประเภท" โมเดล ใช้ในตาราง "โมเดลที่ใช้ในรายงานนี้คืออะไร"
 model_glossary_html = """
 <tr><td><b>Linear Regression</b></td><td>ลากเส้นตรง (หรือระนาบ) ให้ fit กับข้อมูลให้ดีที่สุด
 ง่ายและตีความง่ายสุด แต่จับความสัมพันธ์ที่ไม่เป็นเส้นตรงไม่ได้</td></tr>
@@ -816,53 +760,17 @@ img {{ border-radius: 8px; border: 1px solid var(--border); }}
 </div>
 
 <div class="card">
-<h2>สรุปความแม่นยำของโมเดล <span class="badge badge-test">Test set</span></h2>
-<p class="note">เทรนด้วยข้อมูล train ทั้งหมด วัดผลกับ test set (100 เครื่องยนต์ที่ไม่เคย
-ใช้เทรนหรือเลือกโมเดลเลย) — มีการเลือกแชมป์ <b>2 รอบ</b>: รอบแรกเทียบแค่ 3 โมเดล
-รันครั้งเดียว ได้ {best_name}, ส่วนรอบสอง (ท้ายบทเรียน) เทียบ 4 ตัวเลือกรวม Ensemble
-รันซ้ำ {len(SEEDS)} seed เพื่อความน่าเชื่อถือ — <b>แถวสุดท้าย (ตัวหนา) คือคำตอบที่
-ถูกต้องกว่าและควรใช้อ้างอิง</b> ไม่ใช่แถวก่อนหน้า</p>
+<h2>โมเดลไหนวัดกับอะไร — ตารางเดียวจบ</h2>
+<p class="note">โมเดลทั้ง 4 ตัวด้านล่าง ถูกวัด <b>2 รอบ คนละจุดประสงค์</b>:
+<span class="badge badge-val">Validation</span> วัดก่อน ใช้<b>เลือก</b>ว่าจะเอาตัวไหน
+(รันซ้ำ {len(SEEDS)} seed ต่อโมเดล) ส่วน <span class="badge badge-test">Test</span>
+วัดทีหลัง <b>ครั้งเดียว</b> หลังตัดสินใจเสร็จแล้ว เพื่อยืนยันผลจริง — แถวที่มี ★
+และพื้นหลังเขียว คือตัวที่ validation เลือก แล้วพิสูจน์แล้วว่าดีที่สุดบน test จริงด้วย</p>
 <table>
-<tr><th>โมเดล</th><th>RMSE</th><th>MAE</th></tr>
+<tr><th>โมเดล</th><th>RMSE บน <span class="badge badge-val">Validation</span></th>
+<th>RMSE บน <span class="badge badge-test">Test</span></th></tr>
 {main_table_html}
 </table>
-</div>
-
-<div class="card">
-<h2>ผลที่รายงานอย่างซื่อสัตย์ (เฉลี่ยจาก {len(SEEDS)} seed) <span class="badge badge-test">Test set</span></h2>
-<p class="note">โมเดลกลุ่มต้นไม้มีการสุ่มอยู่ข้างใน รันครั้งเดียวได้ตัวเลขเดียวอาจ
-เป็นเพราะบังเอิญได้ค่าสุ่มที่ดี ตารางนี้เลยรันซ้ำ {len(SEEDS)} รอบด้วยค่าสุ่มต่างกัน
-แล้วรายงานค่าเฉลี่ย ± ส่วนเบี่ยงเบน (ยิ่งส่วนเบี่ยงเบนน้อย ยิ่งเชื่อถือได้ว่าไม่ใช่
-แค่โชคช่วย)</p>
-<table>
-<tr><th>โมเดล</th><th>RMSE เฉลี่ย</th><th>± s.d.</th></tr>
-{seed_rows}
-</table>
-</div>
-
-<div class="card">
-<h2>ทดลองเสริม: ฟีเจอร์ที่คัดแล้ว vs ดิบทั้งหมด <span class="badge badge-val">Validation set</span></h2>
-<p class="note">ตอนต้นบทเรียนตัดเซ็นเซอร์ 6 ตัวที่ค่า "นิ่ง" (แทบไม่เปลี่ยนเลย)
-ทิ้งไป ตารางนี้ทดสอบจริงว่าการตัดทิ้งนั้นช่วยความแม่นยำหรือแค่ช่วยให้เรียบง่ายขึ้น
-โดยลองใส่เซ็นเซอร์นิ่งกลับเข้าไปเทียบกัน — วัดผลด้วย validation set (20 เครื่องยนต์
-ที่กันไว้ต่างหาก) ไม่ใช่ test set เพราะเป็นแค่การทดลองเสริม ไม่ใช่การเลือกแชมป์ใหม่</p>
-<h3>ฟีเจอร์ดิบ (18 ตัวคัดแล้ว / 24 ตัวไม่คัด)</h3>
-<table>
-<tr><th>การทดลอง</th><th>RMSE</th><th>MAE</th></tr>
-{_rows_html(raw_results)}
-</table>
-<h3>ฟีเจอร์ window (72 ตัวคัดแล้ว / 96 ตัวไม่คัด)</h3>
-<p class="note"><b>Window feature</b> คือฟีเจอร์ที่คำนวณจาก "ประวัติย้อนหลัง 20 รอบ"
-ของแต่ละเซ็นเซอร์ (ค่าเฉลี่ย, ความแกว่ง, ระยะห่างจากค่าตอนเครื่องยังใหม่) แทนที่จะ
-ใช้แค่ค่า ณ ปัจจุบันจุดเดียว ช่วยให้โมเดลเห็นแนวโน้มการเสื่อมสภาพ</p>
-<table>
-<tr><th>การทดลอง</th><th>RMSE</th><th>MAE</th></tr>
-{_rows_html(window_results)}
-</table>
-</div>
-
-<div class="card">
-{lr_case_study_html}
 </div>
 
 <div class="card">
@@ -874,4 +782,4 @@ img {{ border-radius: 8px; border: 1px solid var(--border); }}
 with open("report.html", "w", encoding="utf-8") as f:
     f.write(report_html)
 
-print("\nสร้างรายงานเสร็จแล้ว (รวมผลหัวข้อ 14): เปิดไฟล์ report.html ด้วยเบราว์เซอร์เพื่อดูผลได้เลย")
+print("\nสร้างรายงานเสร็จแล้ว: เปิดไฟล์ report.html ด้วยเบราว์เซอร์เพื่อดูผลได้เลย")
